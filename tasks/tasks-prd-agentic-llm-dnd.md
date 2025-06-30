@@ -1,0 +1,69 @@
+## Relevant Files
+
+- `src/audio/stt.py` – Real-time speech-to-text wrapper using Whisper.
+- `src/audio/tts.py` – Text-to-speech adapters supporting multiple engines (Piper, Coqui, etc.).
+- `src/agents/base_agent.py` – Abstract base class defining common agent interfaces.
+- `src/agents/master_agent.py` – Persistent Master Agent managing global world state and story plan.
+- `src/agents/scene_agent.py` – Per-scene agent handling localized interactions, spun up on demand.
+- `src/context/compression.py` – Utilities for summarising long histories into compact memory objects.
+- `src/persistence/storage.py` – Serialize/deserialize campaign state to markdown files and reload on resume.
+- `src/image/generator.py` – Flux[schnell] Runware synchronous client and prompt builder.
+- `src/ui/cli.py` – CLI interface driving the voice-first gameplay loop.
+- `src/ui/dashboard.py` – fasthtml-based web dashboard for voice input, speaker selection, live transcripts, and TTS playback.
+- `src/ui/logger_cli.py` – Lightweight CLI that streams logs for debugging purposes.
+- `docs/whisper.md` – Reference notes & examples for Whisper STT.
+- `docs/tts.md` – Research notes for chosen TTS engine(s).
+- `docs/openai.md` – Guidelines and examples for OpenAI LLM usage.
+- `docs/fastapi.md` – Quick reference for FastAPI (internal tooling, if required).
+- `docs/fasthtml.md` – Up-to-date documentation and snippets for fasthtml UI.
+- `docs/runware.md` – Notes and examples for Runware Flux[schnell] synchronous API.
+
+### Notes
+
+- Documentation markdown files under `docs/` will collect key usage patterns, code snippets, and configuration tips discovered during web research.
+- Testing tasks and directories are intentionally deferred for now and may be added in a later phase.
+
+## Tasks
+
+- [ ] 1.0 Voice Input & Output Pipeline (STT & TTS)
+  - [ ] 1.1 Select and install Whisper and preferred TTS engine libraries.
+  - [ ] 1.2 Implement `src/audio/stt.py` to stream microphone input to Whisper and return text.
+  - [ ] 1.3 Implement `src/audio/tts.py` with a pluggable adapter pattern (start with Piper/Coqui implementation).
+  - [ ] 1.4 Add configuration options to switch TTS engines at runtime.
+
+- [ ] 2.0 Core Agent Architecture (Master & Scene Agents, Context Compression)
+  - [ ] 2.1 Define `BaseAgent` interface with common methods (`prompt()`, `update_memory()`, etc.).
+  - [ ] 2.2 Implement `MasterAgent` to maintain world state and overarching story plan.
+  - [ ] 2.3 Implement `SceneAgent` factory that instantiates per interaction segment referencing `MasterAgent` state.
+  - [ ] 2.4 Implement context summarisation utilities in `context/compression.py` to create compact memory objects.
+  - [ ] 2.5 Integrate LangChain (or alternative) to orchestrate agent prompting and memory retrieval.
+
+- [ ] 3.0 Campaign State Persistence & Resume
+  - [ ] 3.1 Design markdown schema for campaign save files (world state, agents, scene history).
+  - [ ] 3.2 Implement `persistence/storage.py` to serialize state after each scene and load on resume.
+  - [ ] 3.3 Wire persistence hooks into the `MasterAgent` lifecycle to auto-save after each scene.
+  - [ ] 3.4 Implement resume flow in `src/main.py` to detect existing save and restore agents/state at startup.
+
+- [ ] 4.0 Image Generation Service Integration
+  - [ ] 4.1 Build `image/generator.py` wrapper for the Runware Flux[schnell] API with a synchronous interface.
+  - [ ] 4.2 Create prompt builder enforcing a consistent art style and detailed scene descriptions.
+  - [ ] 4.3 Expose configuration options for image parameters (model, resolution, steps, CFGScale).
+  - [ ] 4.4 Return generated images as base64 strings to the UI, with robust error handling and retries.
+
+- [ ] 5.0 Web User Interface (Primary) & CLI Logging
+  - [ ] 5.1 Build fasthtml `ui/dashboard.py` with:
+    - Browser-based microphone capture and streaming to STT backend.
+    - Current speaker selection (button or dropdown).
+    - Display of live transcripts and scene images.
+    - Playback of TTS audio responses.
+  - [ ] 5.2 Implement `ui/logger_cli.py` to stream real-time logs for debugging (no interaction loop).
+  - [ ] 5.3 Update documentation (`README.md`) with setup instructions and usage guide.
+
+- [ ] 6.0 Documentation & Web Research
+  - [ ] 6.0.0 Perform comprehensive web searches to locate the latest official documentation and community examples for each technology listed below.
+  - [ ] 6.1 Review latest Whisper STT documentation; summarize key usage patterns in `docs/whisper.md`.
+  - [ ] 6.2 Research current TTS engines (Piper, Coqui, etc.); capture install and usage notes in `docs/tts.md`.
+  - [ ] 6.3 Gather up-to-date OpenAI Python API references and examples; document in `docs/openai.md`.
+  - [ ] 6.4 Collect FastAPI quick-start guidelines (for potential internal tooling) in `docs/fastapi.md`.
+  - [ ] 6.5 Research fasthtml usage, especially handling of media input/output; record findings in `docs/fasthtml.md`.
+  - [ ] 6.6 Study Runware Flux[schnell] synchronous API details; add notes and example calls to `docs/runware.md`.  
