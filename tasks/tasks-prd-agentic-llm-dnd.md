@@ -12,7 +12,7 @@
 - `src/image/prompt_builder.py` – Enforces consistent art style and builds detailed prompts.
 - `src/ui/cli.py` – CLI interface driving the voice-first gameplay loop.
 - `src/ui/dashboard.py` – fasthtml-based web dashboard for voice input, speaker selection, live transcripts, and TTS playback.
-- `src/ui/logger_cli.py` – Lightweight CLI that streams logs for debugging purposes.
+- `src/ui/logger_cli.py` – Lightweight CLI that streams logs for debugging purposes (implemented).
 - `docs/whisper.md` – Reference notes & examples for Whisper STT.
 - `docs/tts.md` – Research notes for chosen TTS engine(s).
 - `docs/openai.md` – Guidelines and examples for OpenAI LLM usage.
@@ -55,13 +55,13 @@
   - [x] 4.3 Expose configuration options for image parameters (model, resolution, steps, CFGScale).
   - [x] 4.4 Return generated images as base64 strings to the UI, with robust error handling and retries.
 
-- [ ] 5.0 Web User Interface (Primary) & CLI Logging
+- [x] 5.0 Web User Interface (Primary) & CLI Logging
   - [x] 5.1 Build fasthtml `ui/dashboard.py` with:
     - Browser-based microphone capture and streaming to STT backend.
     - Current speaker selection (button or dropdown).
     - Display of live transcripts and scene images.
     - Playback of TTS audio responses.
-  - [ ] 5.2 Implement `ui/logger_cli.py` to stream real-time logs for debugging (no interaction loop).
+  - [x] 5.2 Implement `ui/logger_cli.py` to stream real-time logs for debugging (no interaction loop).
   - [ ] 5.3 Update documentation (`README.md`) with setup instructions and usage guide.
 
 - [ ] 6.0 Documentation & Web Research
