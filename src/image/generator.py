@@ -15,6 +15,7 @@ import base64
 import json
 import os
 from typing import Any, Dict, Optional
+from dataclasses import dataclass
 
 import requests  # type: ignore
 
@@ -29,6 +30,33 @@ DEFAULT_RESOLUTION = os.getenv("RUNWARE_RES", "512x512")  # WIDTHxHEIGHT
 __all__ = [
     "generate_image",
 ]
+
+
+@dataclass
+class ImageConfig:
+    model: str = DEFAULT_MODEL
+    steps: int = DEFAULT_STEPS
+    cfg_scale: float = DEFAULT_CFG_SCALE
+    resolution: str = DEFAULT_RESOLUTION
+
+
+# Mutable global config instance used as fallback when parameters omitted.
+_default_config = ImageConfig()
+
+
+def configure(**kwargs) -> None:
+    """Set global default image parameters.
+
+    Example
+    -------
+    >>> configure(model="fluxschnell-v3", resolution="768x768", steps=40)
+    """
+    global _default_config
+    for key, value in kwargs.items():
+        if hasattr(_default_config, key):
+            setattr(_default_config, key, value)
+        else:
+            raise AttributeError(f"Unknown ImageConfig field '{key}'")
 
 
 def _build_payload(prompt: str, *, model: str, steps: int, cfg_scale: float, resolution: str) -> Dict[str, Any]:
@@ -46,10 +74,10 @@ def _build_payload(prompt: str, *, model: str, steps: int, cfg_scale: float, res
 def generate_image(
     prompt: str,
     *,
-    model: str = DEFAULT_MODEL,
-    steps: int = DEFAULT_STEPS,
-    cfg_scale: float = DEFAULT_CFG_SCALE,
-    resolution: str = DEFAULT_RESOLUTION,
+    model: str | None = None,
+    steps: int | None = None,
+    cfg_scale: float | None = None,
+    resolution: str | None = None,
     timeout: int = 60,
 ) -> str:
     """Generate an image and return it as a base64-encoded string.
@@ -60,7 +88,15 @@ def generate_image(
         "Authorization": f"Bearer {RUNWARE_API_KEY}",
         "Content-Type": "application/json",
     }
-    payload = _build_payload(prompt, model=model, steps=steps, cfg_scale=cfg_scale, resolution=resolution)
+    # Fallback to default config values if not provided
+    cfg = _default_config
+    payload = _build_payload(
+        prompt,
+        model=model or cfg.model,
+        steps=steps or cfg.steps,
+        cfg_scale=cfg_scale or cfg.cfg_scale,
+        resolution=resolution or cfg.resolution,
+    )
 
     try:
         resp = requests.post(RUNWARE_ENDPOINT, headers=headers, json=payload, timeout=timeout)

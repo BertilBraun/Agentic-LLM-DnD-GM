@@ -52,7 +52,7 @@
 - [ ] 4.0 Image Generation Service Integration
   - [x] 4.1 Build `image/generator.py` wrapper for the Runware Flux[schnell] API with a synchronous interface.
   - [x] 4.2 Create prompt builder enforcing a consistent art style and detailed scene descriptions.
-  - [ ] 4.3 Expose configuration options for image parameters (model, resolution, steps, CFGScale).
+  - [x] 4.3 Expose configuration options for image parameters (model, resolution, steps, CFGScale).
   - [ ] 4.4 Return generated images as base64 strings to the UI, with robust error handling and retries.
 
 - [ ] 5.0 Web User Interface (Primary) & CLI Logging
