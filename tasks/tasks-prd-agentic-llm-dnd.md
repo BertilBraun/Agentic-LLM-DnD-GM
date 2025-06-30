@@ -7,7 +7,7 @@
 - `src/agents/scene_agent.py` – Per-scene agent handling localized interactions, spun up on demand.
 - `src/agents/langchain_adapter.py` – LangChain orchestration utilities linking LLMs and agent memory.
 - `src/context/compression.py` – Utilities for summarising long histories into compact memory objects (implemented).
-- `src/persistence/storage.py` – Serialize/deserialize campaign state to markdown files and reload on resume.
+- `src/persistence/storage.py` – Serialize/deserialize campaign state to markdown files and reload on resume (implemented).
 - `src/image/generator.py` – Flux[schnell] Runware synchronous client and prompt builder.
 - `src/ui/cli.py` – CLI interface driving the voice-first gameplay loop.
 - `src/ui/dashboard.py` – fasthtml-based web dashboard for voice input, speaker selection, live transcripts, and TTS playback.
@@ -43,7 +43,7 @@
 
 - [ ] 3.0 Campaign State Persistence & Resume
   - [x] 3.1 Design markdown schema for campaign save files (world state, agents, scene history).
-  - [ ] 3.2 Implement `persistence/storage.py` to serialize state after each scene and load on resume.
+  - [x] 3.2 Implement `persistence/storage.py` to serialize state after each scene and load on resume.
   - [ ] 3.3 Wire persistence hooks into the `MasterAgent` lifecycle to auto-save after each scene.
   - [ ] 3.4 Implement resume flow in `src/main.py` to detect existing save and restore agents/state at startup.
 
