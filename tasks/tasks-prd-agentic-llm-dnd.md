@@ -20,6 +20,7 @@
 - `docs/runware.md` – Notes and examples for Runware Flux[schnell] synchronous API.
 - `docs/campaign_save_schema.md` – Markdown schema for campaign save files.
 - `requirements.txt` – Python dependencies including Whisper STT and TTS engine libraries.
+- `src/main.py` – Application entrypoint with resume logic.
 
 ### Notes
 
@@ -41,11 +42,11 @@
   - [x] 2.4 Implement context summarisation utilities in `context/compression.py` to create compact memory objects.
   - [x] 2.5 Integrate LangChain (or alternative) to orchestrate agent prompting and memory retrieval.
 
-- [ ] 3.0 Campaign State Persistence & Resume
+- [x] 3.0 Campaign State Persistence & Resume
   - [x] 3.1 Design markdown schema for campaign save files (world state, agents, scene history).
   - [x] 3.2 Implement `persistence/storage.py` to serialize state after each scene and load on resume.
   - [x] 3.3 Wire persistence hooks into the `MasterAgent` lifecycle to auto-save after each scene.
-  - [ ] 3.4 Implement resume flow in `src/main.py` to detect existing save and restore agents/state at startup.
+  - [x] 3.4 Implement resume flow in `src/main.py` to detect existing save and restore agents/state at startup.
 
 - [ ] 4.0 Image Generation Service Integration
   - [ ] 4.1 Build `image/generator.py` wrapper for the Runware Flux[schnell] API with a synchronous interface.
