@@ -5,7 +5,7 @@
 - `src/agents/base_agent.py` – Abstract base class defining common agent interfaces.
 - `src/agents/master_agent.py` – Persistent Master Agent managing global world state and story plan.
 - `src/agents/scene_agent.py` – Per-scene agent handling localized interactions, spun up on demand.
-- `src/context/compression.py` – Utilities for summarising long histories into compact memory objects.
+- `src/context/compression.py` – Utilities for summarising long histories into compact memory objects (implemented).
 - `src/persistence/storage.py` – Serialize/deserialize campaign state to markdown files and reload on resume.
 - `src/image/generator.py` – Flux[schnell] Runware synchronous client and prompt builder.
 - `src/ui/cli.py` – CLI interface driving the voice-first gameplay loop.
@@ -36,7 +36,7 @@
   - [x] 2.1 Define `BaseAgent` interface with common methods (`prompt()`, `update_memory()`, etc.).
   - [x] 2.2 Implement `MasterAgent` to maintain world state and overarching story plan.
   - [x] 2.3 Implement `SceneAgent` factory that instantiates per interaction segment referencing `MasterAgent` state.
-  - [ ] 2.4 Implement context summarisation utilities in `context/compression.py` to create compact memory objects.
+  - [x] 2.4 Implement context summarisation utilities in `context/compression.py` to create compact memory objects.
   - [ ] 2.5 Integrate LangChain (or alternative) to orchestrate agent prompting and memory retrieval.
 
 - [ ] 3.0 Campaign State Persistence & Resume
