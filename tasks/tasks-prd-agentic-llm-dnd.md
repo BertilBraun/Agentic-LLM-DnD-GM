@@ -67,7 +67,7 @@
 - [ ] 6.0 Documentation & Web Research
   - [ ] 6.0.0 Perform comprehensive web searches to locate the latest official documentation and community examples for each technology listed below.
   - [x] 6.1 Review latest Whisper STT documentation; summarize key usage patterns in `docs/whisper.md`.
-  - [ ] 6.2 Research current TTS engines (Piper, Coqui, etc.); capture install and usage notes in `docs/tts.md`.
+  - [x] 6.2 Research current TTS engines (Piper, Coqui, etc.); capture install and usage notes in `docs/tts.md`.
   - [ ] 6.3 Gather up-to-date OpenAI Python API references and examples; document in `docs/openai.md`.
   - [ ] 6.4 Collect FastAPI quick-start guidelines (for potential internal tooling) in `docs/fastapi.md`.
   - [ ] 6.5 Research fasthtml usage, especially handling of media input/output; record findings in `docs/fasthtml.md`.
