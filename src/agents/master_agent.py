@@ -14,7 +14,7 @@ from typing import Any, Dict, List
 import openai  # type: ignore
 
 from .base_agent import BaseAgent, Memory, Message
-from ..persistence.storage import save_campaign  # type: ignore
+
 
 __all__ = ["MasterAgent"]
 
@@ -109,4 +109,5 @@ class MasterAgent(BaseAgent):
     # ------------------------------------------------------------------
     def save_state(self, **kwargs) -> Path:
         """Persist current campaign state to a markdown save file."""
+        from persistence.storage import save_campaign
         return save_campaign(self, **kwargs) 

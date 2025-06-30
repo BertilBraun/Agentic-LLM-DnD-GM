@@ -13,7 +13,7 @@ from typing import List
 
 import yaml  # type: ignore
 
-from ..agents.master_agent import MasterAgent
+from agents.master_agent import MasterAgent
 
 # ---------------------------------------------------------------------------
 # Save helpers

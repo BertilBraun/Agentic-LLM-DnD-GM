@@ -30,6 +30,15 @@
 
 ## Tasks
 
+- [ ] 0.0 Documentation & Web Research
+  - [ ] 0.0.0 Perform comprehensive web searches to locate the latest official documentation and community examples for each technology listed below.
+  - [x] 0.1 Review latest Whisper STT documentation; summarize key usage patterns in `docs/whisper.md`.
+  - [x] 0.2 Research current TTS engines (Piper, Coqui, etc.); capture install and usage notes in `docs/tts.md`.
+  - [ ] 0.3 Gather up-to-date OpenAI Python API references and examples; document in `docs/openai.md`.
+  - [ ] 0.4 Collect FastAPI quick-start guidelines (for potential internal tooling) in `docs/fastapi.md`.
+  - [ ] 0.5 Research fasthtml usage, especially handling of media input/output; record findings in `docs/fasthtml.md`.
+  - [ ] 0.6 Study Runware Flux[schnell] synchronous API details; add notes and example calls to `docs/runware.md`.  
+
 - [x] 1.0 Voice Input & Output Pipeline (STT & TTS)
   - [x] 1.1 Select and install Whisper and preferred TTS engine libraries.
   - [x] 1.2 Implement `src/audio/stt.py` to stream microphone input to Whisper and return text.
@@ -63,12 +72,3 @@
     - Playback of TTS audio responses.
   - [x] 5.2 Implement `ui/logger_cli.py` to stream real-time logs for debugging (no interaction loop).
   - [ ] 5.3 Update documentation (`README.md`) with setup instructions and usage guide.
-
-- [ ] 6.0 Documentation & Web Research
-  - [ ] 6.0.0 Perform comprehensive web searches to locate the latest official documentation and community examples for each technology listed below.
-  - [x] 6.1 Review latest Whisper STT documentation; summarize key usage patterns in `docs/whisper.md`.
-  - [x] 6.2 Research current TTS engines (Piper, Coqui, etc.); capture install and usage notes in `docs/tts.md`.
-  - [ ] 6.3 Gather up-to-date OpenAI Python API references and examples; document in `docs/openai.md`.
-  - [ ] 6.4 Collect FastAPI quick-start guidelines (for potential internal tooling) in `docs/fastapi.md`.
-  - [ ] 6.5 Research fasthtml usage, especially handling of media input/output; record findings in `docs/fasthtml.md`.
-  - [ ] 6.6 Study Runware Flux[schnell] synchronous API details; add notes and example calls to `docs/runware.md`.  
