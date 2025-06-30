@@ -49,11 +49,11 @@
   - [x] 3.3 Wire persistence hooks into the `MasterAgent` lifecycle to auto-save after each scene.
   - [x] 3.4 Implement resume flow in `src/main.py` to detect existing save and restore agents/state at startup.
 
-- [ ] 4.0 Image Generation Service Integration
+- [x] 4.0 Image Generation Service Integration
   - [x] 4.1 Build `image/generator.py` wrapper for the Runware Flux[schnell] API with a synchronous interface.
   - [x] 4.2 Create prompt builder enforcing a consistent art style and detailed scene descriptions.
   - [x] 4.3 Expose configuration options for image parameters (model, resolution, steps, CFGScale).
-  - [ ] 4.4 Return generated images as base64 strings to the UI, with robust error handling and retries.
+  - [x] 4.4 Return generated images as base64 strings to the UI, with robust error handling and retries.
 
 - [ ] 5.0 Web User Interface (Primary) & CLI Logging
   - [ ] 5.1 Build fasthtml `ui/dashboard.py` with:

@@ -16,6 +16,7 @@ import json
 import os
 from typing import Any, Dict, Optional
 from dataclasses import dataclass
+import time
 
 import requests  # type: ignore
 
@@ -79,6 +80,8 @@ def generate_image(
     cfg_scale: float | None = None,
     resolution: str | None = None,
     timeout: int = 60,
+    retries: int = 3,
+    backoff: float = 2.0,
 ) -> str:
     """Generate an image and return it as a base64-encoded string.
 
@@ -98,19 +101,22 @@ def generate_image(
         resolution=resolution or cfg.resolution,
     )
 
-    try:
-        resp = requests.post(RUNWARE_ENDPOINT, headers=headers, json=payload, timeout=timeout)
-    except requests.RequestException as exc:  # pragma: no cover
-        raise RuntimeError(f"Network error contacting Runware API: {exc}") from exc
+    last_exc: Exception | None = None
+    for attempt in range(1, retries + 1):
+        try:
+            resp = requests.post(RUNWARE_ENDPOINT, headers=headers, json=payload, timeout=timeout)
+            if resp.status_code == 200:
+                data = resp.json()
+                return data["image_base64"]  # type: ignore[index]
+            last_exc = RuntimeError(f"Runware API {resp.status_code}: {resp.text[:120]}")
+        except requests.RequestException as exc:
+            last_exc = exc
 
-    if resp.status_code != 200:
-        raise RuntimeError(f"Runware API returned {resp.status_code}: {resp.text[:200]}")
-
-    try:
-        data = resp.json()
-        return data["image_base64"]  # type: ignore[index]
-    except (ValueError, KeyError) as exc:
-        raise RuntimeError("Invalid response format from Runware API") from exc
+        if attempt < retries:
+            sleep_time = backoff ** (attempt - 1)
+            time.sleep(sleep_time)
+    # After retries exhausted
+    raise RuntimeError(f"Image generation failed after {retries} attempts: {last_exc}") from last_exc
 
 
 if __name__ == "__main__":
