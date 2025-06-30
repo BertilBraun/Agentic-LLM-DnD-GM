@@ -1,7 +1,7 @@
 ## Relevant Files
 
 - `src/audio/stt.py` – Real-time speech-to-text wrapper using Whisper.
-- `src/audio/tts.py` – Text-to-speech adapters supporting multiple engines (Piper, Coqui, etc.).
+- `src/audio/tts.py` – Text-to-speech adapters supporting multiple engines (Coqui implemented, Piper stub).
 - `src/agents/base_agent.py` – Abstract base class defining common agent interfaces.
 - `src/agents/master_agent.py` – Persistent Master Agent managing global world state and story plan.
 - `src/agents/scene_agent.py` – Per-scene agent handling localized interactions, spun up on demand.
@@ -17,6 +17,7 @@
 - `docs/fastapi.md` – Quick reference for FastAPI (internal tooling, if required).
 - `docs/fasthtml.md` – Up-to-date documentation and snippets for fasthtml UI.
 - `docs/runware.md` – Notes and examples for Runware Flux[schnell] synchronous API.
+- `requirements.txt` – Python dependencies including Whisper STT and TTS engine libraries.
 
 ### Notes
 
@@ -25,11 +26,11 @@
 
 ## Tasks
 
-- [ ] 1.0 Voice Input & Output Pipeline (STT & TTS)
-  - [ ] 1.1 Select and install Whisper and preferred TTS engine libraries.
-  - [ ] 1.2 Implement `src/audio/stt.py` to stream microphone input to Whisper and return text.
-  - [ ] 1.3 Implement `src/audio/tts.py` with a pluggable adapter pattern (start with Piper/Coqui implementation).
-  - [ ] 1.4 Add configuration options to switch TTS engines at runtime.
+- [x] 1.0 Voice Input & Output Pipeline (STT & TTS)
+  - [x] 1.1 Select and install Whisper and preferred TTS engine libraries.
+  - [x] 1.2 Implement `src/audio/stt.py` to stream microphone input to Whisper and return text.
+  - [x] 1.3 Implement `src/audio/tts.py` with a pluggable adapter pattern (start with Piper/Coqui implementation).
+  - [x] 1.4 Add configuration options to switch TTS engines at runtime.
 
 - [ ] 2.0 Core Agent Architecture (Master & Scene Agents, Context Compression)
   - [ ] 2.1 Define `BaseAgent` interface with common methods (`prompt()`, `update_memory()`, etc.).
