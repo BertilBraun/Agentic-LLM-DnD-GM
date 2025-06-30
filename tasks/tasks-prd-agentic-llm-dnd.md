@@ -56,7 +56,7 @@
   - [x] 4.4 Return generated images as base64 strings to the UI, with robust error handling and retries.
 
 - [ ] 5.0 Web User Interface (Primary) & CLI Logging
-  - [ ] 5.1 Build fasthtml `ui/dashboard.py` with:
+  - [x] 5.1 Build fasthtml `ui/dashboard.py` with:
     - Browser-based microphone capture and streaming to STT backend.
     - Current speaker selection (button or dropdown).
     - Display of live transcripts and scene images.
