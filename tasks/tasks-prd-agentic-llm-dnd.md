@@ -8,7 +8,8 @@
 - `src/agents/langchain_adapter.py` – LangChain orchestration utilities linking LLMs and agent memory.
 - `src/context/compression.py` – Utilities for summarising long histories into compact memory objects (implemented).
 - `src/persistence/storage.py` – Serialize/deserialize campaign state to markdown files and reload on resume (implemented).
-- `src/image/generator.py` – Flux[schnell] Runware synchronous client and prompt builder (implemented).
+- `src/image/generator.py` – Flux[schnell] Runware synchronous client (implemented).
+- `src/image/prompt_builder.py` – Enforces consistent art style and builds detailed prompts.
 - `src/ui/cli.py` – CLI interface driving the voice-first gameplay loop.
 - `src/ui/dashboard.py` – fasthtml-based web dashboard for voice input, speaker selection, live transcripts, and TTS playback.
 - `src/ui/logger_cli.py` – Lightweight CLI that streams logs for debugging purposes.
@@ -48,9 +49,9 @@
   - [x] 3.3 Wire persistence hooks into the `MasterAgent` lifecycle to auto-save after each scene.
   - [x] 3.4 Implement resume flow in `src/main.py` to detect existing save and restore agents/state at startup.
 
-- [x] 4.0 Image Generation Service Integration
+- [ ] 4.0 Image Generation Service Integration
   - [x] 4.1 Build `image/generator.py` wrapper for the Runware Flux[schnell] API with a synchronous interface.
-  - [ ] 4.2 Create prompt builder enforcing a consistent art style and detailed scene descriptions.
+  - [x] 4.2 Create prompt builder enforcing a consistent art style and detailed scene descriptions.
   - [ ] 4.3 Expose configuration options for image parameters (model, resolution, steps, CFGScale).
   - [ ] 4.4 Return generated images as base64 strings to the UI, with robust error handling and retries.
 
