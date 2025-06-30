@@ -44,7 +44,7 @@
 - [ ] 3.0 Campaign State Persistence & Resume
   - [x] 3.1 Design markdown schema for campaign save files (world state, agents, scene history).
   - [x] 3.2 Implement `persistence/storage.py` to serialize state after each scene and load on resume.
-  - [ ] 3.3 Wire persistence hooks into the `MasterAgent` lifecycle to auto-save after each scene.
+  - [x] 3.3 Wire persistence hooks into the `MasterAgent` lifecycle to auto-save after each scene.
   - [ ] 3.4 Implement resume flow in `src/main.py` to detect existing save and restore agents/state at startup.
 
 - [ ] 4.0 Image Generation Service Integration

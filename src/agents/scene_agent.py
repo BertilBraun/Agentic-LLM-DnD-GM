@@ -6,6 +6,7 @@ Each SceneAgent is instantiated per scene/encounter and references the shared
 from __future__ import annotations
 
 from typing import Any, Dict, List
+from datetime import datetime as _dt
 
 import openai  # type: ignore
 
@@ -78,6 +79,19 @@ class SceneAgent(BaseAgent):
             type("_Mem", (), {"content": summary, "metadata": {"scene": self.name}})()  # type: ignore[arg-type]
         )
 
+        # Auto-save campaign after scene conclusion
+        if getattr(self.master, "autosave", False):
+            from ..persistence.storage import save_campaign  # local import to avoid cycles
+
+            save_campaign(
+                self.master,
+                scene_history=[{
+                    "title": self.name,
+                    "summary": summary,
+                    "date": _iso_today(),
+                }],
+            )
+
 
 # ---------------------------------------------------------------------------
 # Factory helper
@@ -100,4 +114,7 @@ def json_truncate(obj: Any, limit: int = 400) -> str:  # noqa: ANN401 – generi
         s = json.dumps(obj, ensure_ascii=False)[:limit]
     except TypeError:
         s = str(obj)[:limit]
-    return s 
+    return s
+
+def _iso_today() -> str:
+    return _dt.utcnow().date().isoformat() 

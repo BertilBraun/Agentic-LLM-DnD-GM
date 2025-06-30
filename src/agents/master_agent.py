@@ -14,6 +14,7 @@ from typing import Any, Dict, List
 import openai  # type: ignore
 
 from .base_agent import BaseAgent, Memory, Message
+from ..persistence.storage import save_campaign  # type: ignore
 
 __all__ = ["MasterAgent"]
 
@@ -29,6 +30,7 @@ class MasterAgent(BaseAgent):
         *,
         llm_model: str | None = None,
         openai_api_key: str | None = None,
+        autosave: bool = True,
     ) -> None:
         super().__init__(name)
         self.world_state: Dict[str, Any] = {}
@@ -36,6 +38,7 @@ class MasterAgent(BaseAgent):
         self._llm_model = llm_model or "gpt-3.5-turbo"
         if openai_api_key:
             openai.api_key = openai_api_key
+        self.autosave = autosave
 
     # ------------------------------------------------------------------
     # Persistence helpers
@@ -99,4 +102,11 @@ class MasterAgent(BaseAgent):
 
         # Store and return
         self.add_message("assistant", content)
-        return content 
+        return content
+
+    # ------------------------------------------------------------------
+    # Persistence
+    # ------------------------------------------------------------------
+    def save_state(self, **kwargs) -> Path:
+        """Persist current campaign state to a markdown save file."""
+        return save_campaign(self, **kwargs) 
