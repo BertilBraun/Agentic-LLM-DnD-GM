@@ -35,7 +35,7 @@
 - [ ] 2.0 Core Agent Architecture (Master & Scene Agents, Context Compression)
   - [x] 2.1 Define `BaseAgent` interface with common methods (`prompt()`, `update_memory()`, etc.).
   - [x] 2.2 Implement `MasterAgent` to maintain world state and overarching story plan.
-  - [ ] 2.3 Implement `SceneAgent` factory that instantiates per interaction segment referencing `MasterAgent` state.
+  - [x] 2.3 Implement `SceneAgent` factory that instantiates per interaction segment referencing `MasterAgent` state.
   - [ ] 2.4 Implement context summarisation utilities in `context/compression.py` to create compact memory objects.
   - [ ] 2.5 Integrate LangChain (or alternative) to orchestrate agent prompting and memory retrieval.
 
