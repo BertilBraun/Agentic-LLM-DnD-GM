@@ -7,8 +7,8 @@ from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
-from audio.stt import WhisperSTT, stt
-from audio.tts import BaseTTS, get_tts
+from stt import WhisperSTT, stt
+from tts import BaseTTS, get_tts
 
 from llm import llm_parse, llm_chat
 

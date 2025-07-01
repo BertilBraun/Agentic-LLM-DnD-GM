@@ -1,11 +1,7 @@
-torch>=2.0.0
-openai-whisper>=20230314
-TTS>=0.15.3
-sounddevice>=0.4.6
-soundfile>=0.12.1
-langchain>=0.0.350
-PyYAML>=6.0
-requests>=2.31.0
-fastapi>=0.110.0
-uvicorn>=0.22.0
-colorama>=0.4.6 
+openai
+openai-whisper
+sounddevice
+soundfile
+
+# TTS
+PyQt6

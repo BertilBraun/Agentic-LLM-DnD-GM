@@ -3,3 +3,6 @@
 src/config.py
 
 **/**.wav
+**/**.png
+
+**/.sesskey

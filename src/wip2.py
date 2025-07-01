@@ -3,22 +3,25 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Literal, Optional
+from typing import Callable, Generator, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
-from audio.stt import WhisperSTT, stt
-from audio.tts import BaseTTS, get_tts
+from stt import WhisperSTT, stt
+from tts import BaseTTS, get_tts
 
 from llm import llm_parse, llm_chat
 
+from image import generate_image
+
 from config import OPENAI_API_KEY
 
-PLAN_FILE = Path('plan.json')
+STATE_SAVE_FILE = Path('save_state.json')
 
 DM_TTS_INSTRUCTIONS = (
     'Speak in a deep, authoritative voice with dramatic pauses and varied intonation to bring the fantasy world to life'
 )
+
 
 OPENAI_VOICE_ID_DESCRIPTIONS = """Alloy: Confident, warm, and energetic with a friendly tone. Versatile for expressive, conversational tasks.
 Ash: Calm, neutral, with a soothing delivery. Suitable for professional or instructional content.
@@ -56,6 +59,9 @@ class CampaignPlan(BaseModel):
     acts: List[str] = Field(
         description='3-5 major story acts/chapters, each 1-2 sentences describing key events, locations, or revelations that drive the narrative forward'
     )
+    visual_style: str = Field(
+        description='Detailed visual style guide (400-600 characters) defining the artistic direction for all generated images: art style (digital painting, fantasy art, etc.), color palette, lighting preferences, atmosphere, level of detail, and any specific visual themes that should be consistent across all scenes'
+    )
 
 
 class NPC(BaseModel):
@@ -64,6 +70,9 @@ class NPC(BaseModel):
     )
     role: str = Field(
         description='Complete character profile including: personality traits, motivations, knowledge they possess, relationship to the story, specific information or quest they need to convey to players, and any secrets or hidden agendas'
+    )
+    visual_description: str = Field(
+        description='Extremely detailed physical description (300-500 characters) for image generation: race, age, build, facial features, hair, eyes, clothing, armor, weapons, accessories, scars, tattoos, posture, and any distinctive visual elements. Be specific about colors, materials, and styles.'
     )
     voice_id: Literal[
         'alloy', 'ash', 'ballad', 'coral', 'echo', 'fable', 'onyx', 'nova', 'sage', 'shimmer', 'verse'
@@ -78,6 +87,9 @@ class NPC(BaseModel):
 class DMResponse(BaseModel):
     gm_speech: str = Field(
         description='Your response as the Dungeon Master. Use vivid descriptions, engage the senses, create atmosphere, and respond directly to player actions. Include narrative exposition, NPC dialogue, environmental details, or consequences of actions as appropriate.'
+    )
+    scene_description: str = Field(
+        description='Extremely detailed visual description (400-800 characters) of the current scene for image generation: location, environment, lighting, weather, objects, creatures, architecture, vegetation, atmosphere, colors, textures, and spatial relationships. Focus on visual elements that would make a compelling image.'
     )
     memory_append: str = Field(
         description='Concise summary of new developments to remember: player decisions, story progression, world changes, or important revelations. Write in past tense as historical facts.'
@@ -100,24 +112,6 @@ class ConversationSummary(BaseModel):
     summary: str = Field(
         description='Bullet-point summary of key information the GM needs to track: what the player learned, decisions made, relationships formed/damaged, quest progress, and any promises or commitments made by either party.'
     )
-
-
-# ───────────────────────────────────────────────────────────────
-# Memory helpers (plain-text file)
-# ───────────────────────────────────────────────────────────────
-MEM_FILE = Path('memory.txt')
-if not MEM_FILE.exists():
-    MEM_FILE.write_text('=== Campaign Memory ===\n')
-
-
-def read_memory() -> str:
-    with open(MEM_FILE, 'r', encoding='utf-8') as f:
-        return f.read()
-
-
-def append_memory(chunk: str):
-    with open(MEM_FILE, 'a', encoding='utf-8') as f:
-        f.write(chunk.strip() + '\n\n')
 
 
 # ───────────────────────────────────────────────────────────────
@@ -175,14 +169,14 @@ Focus on creating memorable moments and meaningful player choices.""",
     return llm_parse(messages, CampaignPlan)
 
 
-def dm_turn(player_text: str, plan: CampaignPlan) -> DMResponse:
+def dm_turn(player_text: str, plan: CampaignPlan, memory: str) -> DMResponse:
     prompt = f"""You are an expert Dungeon Master running a D&D campaign. Your role is to create immersive, engaging experiences that respond meaningfully to player actions.
 
 ===== CAMPAIGN CONTEXT =====
 {plan.model_dump_json(indent=2)}
 
 ===== CURRENT GAME STATE =====
-{read_memory()}
+{memory}
 
 ===== PLAYER ACTION =====
 {player_text}
@@ -195,6 +189,7 @@ Respond as the DM by:
 3. **Advance the story** - Move the narrative forward while staying true to the campaign plan
 4. **Create meaningful choices** - Present opportunities for player agency and decision-making
 5. **Maintain consistency** - Respect established world rules and previous events
+6. **Describe the scene visually** - Provide extremely detailed visual description for image generation
 
 **Guidelines:**
 - Use "you" to address the player directly
@@ -203,6 +198,13 @@ Respond as the DM by:
 - Introduce complications or new information as appropriate
 - If introducing an NPC for direct interaction, include them in the response
 - Keep responses engaging but not overwhelming (2-4 sentences typically)
+- For scene_description: Focus on visual elements that would create a compelling, detailed image
+
+**Visual Description Requirements:**
+- Include specific details about location, lighting, objects, creatures, architecture
+- Mention colors, textures, spatial relationships, weather, atmosphere
+- Be extremely specific and detailed (400-800 characters)
+- Always incorporate the campaign's visual_style: {plan.visual_style}
 
 **Tone:** Match the campaign's established tone while maintaining dramatic tension and player engagement."""
 
@@ -211,7 +213,27 @@ Respond as the DM by:
     return response
 
 
-def npc_loop(npc: NPC, stt_model: WhisperSTT) -> None:
+def image_prompt(description: str, visual_style: str) -> str:
+    return f"""VISUAL STYLE:
+{visual_style}
+
+DESCRIPTION:
+{description}"""
+
+
+def image(description: str, visual_style: str) -> Path:
+    prompt = image_prompt(description, visual_style)
+    print('🎨 Generating image...')
+    image = generate_image(prompt)[0]
+    print(f'🖼️  Image saved: {image}')
+    return image
+
+
+def npc_loop(npc: NPC, stt_model: WhisperSTT, plan: CampaignPlan) -> Generator[UiUpdate, None, str]:
+    # Generate NPC portrait at start of conversation
+    npc_image = image(npc.visual_description, f'{plan.visual_style}, character portrait')
+    yield UiUpdate(history='', image=npc_image)
+
     tts = create_tts(voice_id=npc.voice_id, instructions=npc.voice_instructions)
 
     messages: list[dict[str, str]] = [
@@ -249,6 +271,8 @@ Remember: You are having a real conversation with an adventurer in your world. R
         transcript.append(f'Player: {player_input}\n{npc.name}: {npc_msg.npc_speech}')
         messages.append({'role': 'assistant', 'content': npc_msg.npc_speech})
 
+        yield UiUpdate(history='\n\n'.join(transcript), image=npc_image)
+
         if npc_msg.done:
             break
 
@@ -272,58 +296,113 @@ Format as clear, actionable bullet points the GM can reference later.""",
     ]
 
     summary = llm_parse(summary_prompt, ConversationSummary)
-    append_memory(f'\n**Conversation with {npc.name}:**\n{summary.summary}\n')
+    return f'\n**Conversation with {npc.name}:**\n{summary.summary}\n'
 
 
 # ───────────────────────────────────────────────────────────────
 # Main loop
 # ───────────────────────────────────────────────────────────────
-def main():
-    # Draft a campaign the first time we run
-    if not PLAN_FILE.exists():
-        plan = interactive_planner()
-        print(f'\n✨ Campaign created: {plan.title}')
-        print(f'📖 Synopsis: {plan.synopsis}')
-        PLAN_FILE.write_text(plan.model_dump_json(indent=2))
-        append_memory(
-            f'# Campaign: {plan.title}\n\n## Synopsis\n{plan.synopsis}\n\n## Story Structure\n'
-            + '\n'.join([f'**Act {i + 1}:** {act}' for i, act in enumerate(plan.acts)])
+
+
+class AppState(BaseModel):
+    plan: Optional[CampaignPlan]
+    current_scene_image: Optional[Path]
+    current_npc: Optional[NPC]
+    memory: str
+
+    def save(self):
+        STATE_SAVE_FILE.write_text(self.model_dump_json(indent=2))
+
+    @staticmethod
+    def load():
+        if not STATE_SAVE_FILE.exists():
+            return AppState(plan=None, current_scene_image=None, current_npc=None, memory='')
+        return AppState.model_validate_json(STATE_SAVE_FILE.read_text())
+
+    def append_memory(self, chunk: str):
+        self.memory += chunk.strip() + '\n\n'
+        self.save()
+
+    def init_campaign(self):
+        self.plan = interactive_planner()
+        print(f'\n✨ Campaign created: {self.plan.title}')
+        print(f'📖 Synopsis: {self.plan.synopsis}')
+        self.append_memory(
+            f'# Campaign: {self.plan.title}\n\n## Synopsis\n{self.plan.synopsis}\n\n## Story Structure\n'
+            + '\n'.join([f'**Act {i + 1}:** {act}' for i, act in enumerate(self.plan.acts)])
             + '\n'
         )
-    else:
-        plan = CampaignPlan.model_validate_json(PLAN_FILE.read_text())
-        print(f'📜 Continuing campaign: {plan.title}')
+        self.save()
+
+
+class UiUpdate(BaseModel):
+    history: str
+    image: Optional[Path]
+
+
+def main(player_input: Callable[[], str]) -> Generator[UiUpdate, None, None]:
+    app_state = AppState.load()
+
+    # Draft a campaign the first time we run
+    if app_state.plan is None:
+        app_state.init_campaign()
+
+    assert app_state.plan is not None
 
     stt_model = WhisperSTT(model_name='base')
     dm_tts = create_tts(voice_id='ash', instructions=DM_TTS_INSTRUCTIONS)
 
     print('\n🎲 Starting your D&D adventure! Speak your actions and the DM will respond.\n')
 
-    dm_tts.play(
-        dm_turn(
-            "Describe the current situation, since the players are just arriving in the world and don't know what's going on",
-            plan,
-        ).gm_speech
+    dm_out = dm_turn(
+        "Describe the current situation, since the players are just arriving in the world and don't know what's going on",
+        app_state.plan,
+        app_state.memory,
     )
+    if app_state.current_scene_image is None:
+        app_state.current_scene_image = image(dm_out.scene_description, app_state.plan.visual_style)
 
-    while True:
-        # Collect player speech
-        print('🎙️  What do you do?')
-        player_text = stt(stt_model)
+    dm_tts.play(dm_out.gm_speech)
 
-        # DM step
-        dm_out = dm_turn(player_text, plan)
-        append_memory(f'**Player:** {player_text}\n**DM:** {dm_out.gm_speech}\n**Update:** {dm_out.memory_append}\n')
-        dm_tts.play(dm_out.gm_speech)
+    history = f'**DM:** {dm_out.gm_speech}'
+    yield UiUpdate(history=history, image=app_state.current_scene_image)
 
-        # Spawn NPC if ordered
-        if dm_out.npc:
-            print(f'\n💬 {dm_out.npc.name} wants to talk with you...')
-            npc_loop(dm_out.npc, stt_model)
-            print('\n🎭 Back to the main adventure...\n')
+    try:
+        while True:
+            # Collect player speech
+            player_text = player_input()
+            # DM step
+            dm_out = dm_turn(player_text, app_state.plan, app_state.memory)
 
+            # Generate scene image
+            app_state.current_scene_image = image(dm_out.scene_description, app_state.plan.visual_style)
 
-# TODO images? displayed?
+            dm_tts.play(dm_out.gm_speech)
+
+            history += f'\n**Player:** {player_text}\n**DM:** {dm_out.gm_speech}'
+            yield UiUpdate(history=history, image=app_state.current_scene_image)
+
+            app_state.append_memory(
+                f"""
+**Player:** {player_text}
+**DM:** {dm_out.gm_speech}
+**Update:** {dm_out.memory_append}
+"""
+            )
+            # Spawn NPC if ordered
+            if dm_out.npc:
+                print(f'\n💬 {dm_out.npc.name} wants to talk with you...')
+                interaction_summary = yield from npc_loop(dm_out.npc, stt_model, app_state.plan)
+                app_state.append_memory(interaction_summary)
+                print('\n🎭 Back to the main adventure...\n')
+    finally:
+        app_state.save()
+
 
 if __name__ == '__main__':
-    main()
+    stt_model = WhisperSTT(model_name='base')
+
+    def player_input():
+        return stt(stt_model)
+
+    main(player_input)
