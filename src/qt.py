@@ -43,7 +43,7 @@ class DMWorker(QThread):
     path, and the raw player text back to the GUI using the *dm_ready* signal.
     """
 
-    dm_ready = pyqtSignal(str, str, str)  # history, image_path
+    dm_ready = pyqtSignal(str, str)  # history, image_path
 
     def __init__(self, parent: Optional[QObject] | None = None) -> None:
         super().__init__(parent)
@@ -80,6 +80,7 @@ class MainWindow(QMainWindow):
         self.history.setReadOnly(True)
 
         self.start_btn = QPushButton('Start Recording')
+        self.start_btn.setEnabled(False)
         self.stop_btn = QPushButton('Stop Recording')
         self.stop_btn.setEnabled(False)
 

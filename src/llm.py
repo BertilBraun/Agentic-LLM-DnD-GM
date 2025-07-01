@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import Type, TypeVar
 
 from pydantic import BaseModel
@@ -20,10 +21,12 @@ client = OpenAI(
 
 
 def llm_chat(messages: list[dict[str, str]]) -> str:
+    start = time.time()
     res = client.chat.completions.create(
         model=MODEL,
         messages=messages,  # type: ignore
     )
+    print(f'LLM call took {time.time() - start:.2f}s')
     assert res.choices[0].message.content is not None
     return res.choices[0].message.content
 
@@ -32,6 +35,7 @@ T = TypeVar('T', bound=BaseModel)
 
 
 def llm_parse(messages: list[dict[str, str]], response_format: Type[T]) -> T:
+    start = time.time()
     res = (
         client.beta.chat.completions.parse(
             model=MODEL,
@@ -41,5 +45,6 @@ def llm_parse(messages: list[dict[str, str]], response_format: Type[T]) -> T:
         .choices[0]
         .message.parsed
     )
+    print(f'LLM parse took {time.time() - start:.2f}s')
     assert res is not None
     return res

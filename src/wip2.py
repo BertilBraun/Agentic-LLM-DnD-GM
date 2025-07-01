@@ -16,6 +16,10 @@ from image import generate_image
 
 from config import OPENAI_API_KEY
 
+# TODO allow translation to German
+# TODO allow stt from German
+# TODO compress the conversation history once it gets too long or a clear cutoff point is reached -> after f.e. going somewhere, where they can't go back and cannot interact with the history anymore (i.e. no other characters are around), then the history can be compressed
+
 STATE_SAVE_FILE = Path('save_state.json')
 
 DM_TTS_INSTRUCTIONS = (
@@ -362,10 +366,10 @@ def main(player_input: Callable[[], str]) -> Generator[UiUpdate, None, None]:
     if app_state.current_scene_image is None:
         app_state.current_scene_image = image(dm_out.scene_description, app_state.plan.visual_style)
 
-    dm_tts.play(dm_out.gm_speech)
-
     history = f'**DM:** {dm_out.gm_speech}'
     yield UiUpdate(history=history, image=app_state.current_scene_image)
+
+    dm_tts.play(dm_out.gm_speech)
 
     try:
         while True:
@@ -377,10 +381,10 @@ def main(player_input: Callable[[], str]) -> Generator[UiUpdate, None, None]:
             # Generate scene image
             app_state.current_scene_image = image(dm_out.scene_description, app_state.plan.visual_style)
 
-            dm_tts.play(dm_out.gm_speech)
-
             history += f'\n**Player:** {player_text}\n**DM:** {dm_out.gm_speech}'
             yield UiUpdate(history=history, image=app_state.current_scene_image)
+
+            dm_tts.play(dm_out.gm_speech)
 
             app_state.append_memory(
                 f"""
