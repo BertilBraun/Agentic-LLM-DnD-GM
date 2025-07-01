@@ -80,7 +80,9 @@ class WhisperSTT:
             # Already started
             return
 
+        self._buffer.clear()
         self._stop_event.clear()
+
         self._record_thread = threading.Thread(target=self._record_loop, daemon=True)
         self._record_thread.start()
 
@@ -89,6 +91,7 @@ class WhisperSTT:
         self._stop_event.set()
         if self._record_thread and self._record_thread.is_alive():
             self._record_thread.join()
+            self._record_thread = None
 
         if not self._buffer:
             return ''
@@ -102,7 +105,9 @@ class WhisperSTT:
             wf.writeframes((audio * 32767).astype(np.int16).tobytes())
 
         abs_filename = Path(FILENAME).absolute()
-        result = self._model.transcribe(str(abs_filename), language=self.language, initial_prompt=self.initial_prompt)
+        result = self._model.transcribe(
+            str(abs_filename), language=self.language, initial_prompt=self.initial_prompt, fp16=False
+        )
 
         return result['text']  # type: ignore
 
@@ -134,7 +139,9 @@ def stt(model: WhisperSTT) -> str:
     input('Press Enter to start recording...')
     model.start()
     input('Press Enter to stop recording...')
-    return model.close()
+    text = model.close()
+    print(f'🗣️  Player: {text}')
+    return text
 
 
 if __name__ == '__main__':

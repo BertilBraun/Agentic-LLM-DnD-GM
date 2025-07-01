@@ -100,7 +100,6 @@ def append_memory(chunk: str):
 # ───────────────────────────────────────────────────────────────
 def interactive_planner() -> CampaignPlan:
     """Ask questions until the user hits Ctrl-C or says 'done'."""
-    print('🛠  Planner started.  Press Ctrl-C when you’re finished answering.')
     campaign_title = input('Enter the campaign title: ')
     messages = [
         {
@@ -112,19 +111,17 @@ def interactive_planner() -> CampaignPlan:
             'content': f'The campaign title is "{campaign_title}".',
         },
     ]
-    try:
-        while True:
-            q = llm_chat(messages)
-            messages.append({'role': 'assistant', 'content': q})
-            print(f'[Planner] {q}')
-            a = input('("done" to finish planning) >> ').strip()
-            if a.lower() == 'done':
-                break
-            messages.append({'role': 'user', 'content': a})
-    except KeyboardInterrupt:
-        print('\n✧ Generating full campaign …')
+    while True:
+        q = llm_chat(messages)
+        messages.append({'role': 'assistant', 'content': q})
+        print(f'[Planner] {q}')
+        a = input('("done" to finish planning) >> ').strip()
+        if a.lower() == 'done':
+            break
+        messages.append({'role': 'user', 'content': a})
 
-    # ✧ SECOND CALL – ask for the structured plan
+    print('\nGenerating full campaign …')
+
     messages.append({'role': 'system', 'content': 'Using everything above, output the CampaignPlan.'})
     return llm_parse(messages, CampaignPlan)
 
@@ -164,7 +161,7 @@ def npc_loop(npc: NPC, stt_model: WhisperSTT) -> None:
         if npc_msg.done:
             break
 
-    # ✧ SECOND CALL – summarise the finished conversation
+    # Summarise the finished conversation
     summary_prompt = [
         {'role': 'system', 'content': 'Summarise the salient information for the GM.'},
         {'role': 'user', 'content': '\n'.join(transcript)},
@@ -177,9 +174,10 @@ def npc_loop(npc: NPC, stt_model: WhisperSTT) -> None:
 # Main loop
 # ───────────────────────────────────────────────────────────────
 def main():
-    # 0) Draft a campaign the first time we run
+    # Draft a campaign the first time we run
     if not PLAN_FILE.exists():
         plan = interactive_planner()
+        print(f'Created campaign plan: {plan}')
         PLAN_FILE.write_text(plan.model_dump_json(indent=2))
         append_memory(f'# Campaign: {plan.title}\n## Synopsis\n{plan.synopsis}\n')
     else:
@@ -188,26 +186,21 @@ def main():
     stt_model = WhisperSTT(model_name='base')
     dm_tts = create_tts(voice_id='alloy', instructions=DM_TTS_INSTRUCTIONS)
 
-    try:
-        while True:
-            # Collect player speech
-            print('🎙️  Your move …')
-            player_text = stt(stt_model)
-            print(f'Player: {player_text}')
+    while True:
+        # Collect player speech
+        print('🎙️  Your move …')
+        player_text = stt(stt_model)
+        print(f'Player: {player_text}')
 
-            # TODO not only output what to speak - but also how to speak it and with what voice
+        # DM step
+        dm_out = dm_turn(player_text, plan)
+        print(f'DM: {dm_out.gm_speech}')
+        append_memory(dm_out.memory_append)
+        dm_tts.play(dm_out.gm_speech)
 
-            # DM step
-            dm_out = dm_turn(player_text, plan)
-            print(f'DM: {dm_out.gm_speech}')
-            append_memory(dm_out.memory_append)
-            dm_tts.play(dm_out.gm_speech)
-
-            # Spawn NPC if ordered
-            if dm_out.npc:
-                npc_loop(dm_out.npc, stt_model)
-    except KeyboardInterrupt:
-        print('\nBye!')
+        # Spawn NPC if ordered
+        if dm_out.npc:
+            npc_loop(dm_out.npc, stt_model)
 
 
 if __name__ == '__main__':

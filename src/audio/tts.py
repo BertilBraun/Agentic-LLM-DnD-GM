@@ -94,6 +94,7 @@ class OpenAITTSAdapter(BaseTTS):
                     yield chunk
                     buffer.write(chunk)
 
+            output_path.parent.mkdir(parents=True, exist_ok=True)
             output_path.write_bytes(buffer.getvalue())
 
 
