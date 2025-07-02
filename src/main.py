@@ -16,7 +16,7 @@ from image import generate_image
 
 from memory import SimpleMemorySystem
 
-from config import LANGUAGE, OPENAI_API_KEY
+from config import LANGUAGE, OPENAI_API_KEY, WHISPER_MODEL
 
 STATE_SAVE_FILE = Path('save/state.json')
 STATE_SAVE_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -333,11 +333,6 @@ class AppState(BaseModel):
     def append_memory(self, event: str):
         """Add event and check if compression is needed"""
         self.memory.add_event(event)
-
-        # Check if we should compress
-        if self.memory.check_for_cutoff():
-            self.memory.compress_memory()
-
         self.save()
 
     def get_memory_for_dm(self) -> str:
@@ -397,6 +392,7 @@ def main(player_input: Callable[[], str]) -> Generator[UiUpdate, None, None]:
             dm_out = dm_turn(player_text, app_state)
 
             # Generate scene image
+            # TODO async image?
             app_state.current_scene_image = image(dm_out.scene_description, app_state.plan.visual_style)
 
             history += f'\n**Player:** {player_text}\n**DM:** {dm_out.gm_speech}'
@@ -418,6 +414,10 @@ def main(player_input: Callable[[], str]) -> Generator[UiUpdate, None, None]:
                 app_state.append_memory(f'**NPC Interaction:** {interaction_summary}')
                 print('\n🎭 Back to the main adventure...\n')
 
+                history += f'\nInteraction with {dm_out.npc.name}: {interaction_summary}'
+
+                yield UiUpdate(history=history, image=app_state.current_scene_image)
+
     finally:
         app_state.save()
 
@@ -430,7 +430,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.cli:
-        stt_model = WhisperSTT(model_name='base', language=LANGUAGE)  # Expensive - therefore only load once
+        stt_model = WhisperSTT(model_name=WHISPER_MODEL, language=LANGUAGE)  # Expensive - therefore only load once
 
         def player_input():
             return stt(stt_model)

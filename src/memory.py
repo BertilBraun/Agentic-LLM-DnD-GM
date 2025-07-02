@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pydantic import BaseModel, Field
-from datetime import datetime
 
 from llm import llm_parse
 
@@ -30,6 +29,10 @@ class SimpleMemorySystem(BaseModel):
     def add_event(self, event: str):
         """Add a new event to short-term memory"""
         self.short_term_memory.append(event.strip())
+
+        # Check if we should compress
+        if self.check_for_cutoff():  # TODO asyncio.create_task(self.check_for_cutoff_then_compress())
+            self.compress_memory()
 
     def check_for_cutoff(self) -> bool:
         """Ask LLM if this is a good point to compress memory"""
@@ -96,10 +99,6 @@ Format the response as updated long-term memory in markdown. Be comprehensive bu
 
             # Keep only the last 2-3 events for immediate context
             self.short_term_memory = self.short_term_memory[-3:]
-
-            # Update metadata
-            self.compression_count += 1
-            self.last_compression = datetime.now().isoformat()
 
             print(f'📚 Memory compressed! Session summary: {compression.session_summary}')
             return True

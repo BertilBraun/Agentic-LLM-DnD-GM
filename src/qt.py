@@ -36,6 +36,8 @@ from PyQt6.QtWidgets import (
 from stt import WhisperSTT
 from main import main
 
+from config import WHISPER_MODEL, LANGUAGE
+
 
 class DMWorker(QThread):
     """Runs the blocking DM loop in its own thread.
@@ -102,7 +104,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(container)
 
         # ======================== Audio / Workers ==========================
-        self.stt_model = WhisperSTT(model_name='base')
+        self.stt_model = WhisperSTT(model_name=WHISPER_MODEL, language=LANGUAGE)
 
         self.worker = DMWorker()
         self.worker.dm_ready.connect(self.on_dm_ready)
