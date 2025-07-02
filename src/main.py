@@ -18,7 +18,7 @@ from config import OPENAI_API_KEY
 
 # TODO allow translation to German
 # TODO allow stt from German
-# TODO compress the conversation history once it gets too long or a clear cutoff point is reached -> after f.e. going somewhere, where they can't go back and cannot interact with the history anymore (i.e. no other characters are around), then the history can be compressed
+# TODO compress the conversation history once it gets too long (based on campaign save schema?) or a clear cutoff point is reached -> after f.e. going somewhere, where they can't go back and cannot interact with the history anymore (i.e. no other characters are around), then the history can be compressed
 
 STATE_SAVE_FILE = Path('save/state.json')
 STATE_SAVE_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -218,16 +218,13 @@ Respond as the DM by:
     return response
 
 
-def image_prompt(description: str, visual_style: str) -> str:
-    return f"""VISUAL STYLE:
+def image(description: str, visual_style: str) -> Path:
+    prompt = f"""VISUAL STYLE:
 {visual_style}
 
 DESCRIPTION:
 {description}"""
 
-
-def image(description: str, visual_style: str) -> Path:
-    prompt = image_prompt(description, visual_style)
     print('🎨 Generating image...')
     image = generate_image(prompt)[0]
     print(f'🖼️  Image saved: {image}')
@@ -273,7 +270,7 @@ Remember: You are having a real conversation with an adventurer in your world. R
 
         print(f'{npc.name}: {npc_msg.npc_speech}')
         tts.play(npc_msg.npc_speech)
-        transcript.append(f'Player: {player_text}\n{npc.name}: {npc_msg.npc_speech}')
+        transcript.append(f'**Player:** {player_text}\n**Conversation with {npc.name}:** {npc_msg.npc_speech}')
         messages.append({'role': 'assistant', 'content': npc_msg.npc_speech})
 
         yield UiUpdate(history='\n\n'.join(transcript), image=npc_image)
@@ -310,34 +307,44 @@ Format as clear, actionable bullet points the GM can reference later.""",
 
 
 class AppState(BaseModel):
-    plan: Optional[CampaignPlan]
+    plan: CampaignPlan
     current_scene_image: Optional[Path]
     current_npc: Optional[NPC]
-    memory: str
+    _memory: str
 
     def save(self):
         STATE_SAVE_FILE.write_text(self.model_dump_json(indent=2))
 
     @staticmethod
     def load():
-        if not STATE_SAVE_FILE.exists():
-            return AppState(plan=None, current_scene_image=None, current_npc=None, memory='')
-        return AppState.model_validate_json(STATE_SAVE_FILE.read_text())
+        if STATE_SAVE_FILE.exists():
+            return AppState.model_validate_json(STATE_SAVE_FILE.read_text())
+
+        # No campaign loaded, create a new one
+        plan = interactive_planner()
+        print(f'\n✨ Campaign created: {plan.title}')
+        print(f'📖 Synopsis: {plan.synopsis}')
+        app_state = AppState(plan=plan, current_scene_image=None, current_npc=None, _memory='')
+        app_state.save()
+        return app_state
 
     def append_memory(self, chunk: str):
-        self.memory += chunk.strip() + '\n\n'
+        self._memory += chunk.strip() + '\n\n'
         self.save()
 
-    def init_campaign(self):
-        self.plan = interactive_planner()
-        print(f'\n✨ Campaign created: {self.plan.title}')
-        print(f'📖 Synopsis: {self.plan.synopsis}')
-        self.append_memory(
-            f'# Campaign: {self.plan.title}\n\n## Synopsis\n{self.plan.synopsis}\n\n## Story Structure\n'
-            + '\n'.join([f'**Act {i + 1}:** {act}' for i, act in enumerate(self.plan.acts)])
-            + '\n'
-        )
-        self.save()
+    def get_memory(self) -> str:
+        acts = '\n'.join([f'**Act {i + 1}:** {act}' for i, act in enumerate(self.plan.acts)])
+        return f"""# Campaign: {self.plan.title}
+
+## Synopsis
+{self.plan.synopsis}
+
+## Story Structure
+{acts}
+
+## Current Scene
+{self._memory}
+"""
 
 
 class UiUpdate(BaseModel):
@@ -348,12 +355,6 @@ class UiUpdate(BaseModel):
 def main(player_input: Callable[[], str]) -> Generator[UiUpdate, None, None]:
     app_state = AppState.load()
 
-    # Draft a campaign the first time we run
-    if app_state.plan is None:
-        app_state.init_campaign()
-
-    assert app_state.plan is not None
-
     dm_tts = create_tts(voice_id='ash', instructions=DM_TTS_INSTRUCTIONS)
 
     print('\n🎲 Starting your D&D adventure! Speak your actions and the DM will respond.\n')
@@ -361,7 +362,7 @@ def main(player_input: Callable[[], str]) -> Generator[UiUpdate, None, None]:
     dm_out = dm_turn(
         "Describe the current situation, since the players are just arriving in the world and don't know what's going on",
         app_state.plan,
-        app_state.memory,
+        app_state.get_memory(),
     )
     if app_state.current_scene_image is None:
         app_state.current_scene_image = image(dm_out.scene_description, app_state.plan.visual_style)
@@ -376,7 +377,7 @@ def main(player_input: Callable[[], str]) -> Generator[UiUpdate, None, None]:
             # Collect player speech
             player_text = player_input()
             # DM step
-            dm_out = dm_turn(player_text, app_state.plan, app_state.memory)
+            dm_out = dm_turn(player_text, app_state.plan, app_state.get_memory())
 
             # Generate scene image
             app_state.current_scene_image = image(dm_out.scene_description, app_state.plan.visual_style)

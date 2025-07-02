@@ -13,6 +13,7 @@ Key features
 
 from __future__ import annotations
 
+import re
 import sys
 import queue
 from pathlib import Path
@@ -36,8 +37,6 @@ from PyQt6.QtWidgets import (
 from stt import WhisperSTT
 from main import main
 
-# TODO no stop button - start is converted to stop once the recording is started
-
 
 class DMWorker(QThread):
     """Runs the blocking DM loop in its own thread.
@@ -47,6 +46,7 @@ class DMWorker(QThread):
     """
 
     dm_ready = pyqtSignal(str, str)  # history, image_path
+    input_requested = pyqtSignal()
 
     def __init__(self, parent: Optional[QObject] | None = None) -> None:
         super().__init__(parent)
@@ -60,6 +60,7 @@ class DMWorker(QThread):
     # -------------------------------------------------------------- QThread API
     def run(self) -> None:  # noqa: D401 – Qt naming convention
         def player_input() -> str:
+            self.input_requested.emit()
             return self.queue.get()
 
         for update in main(player_input):
@@ -106,6 +107,7 @@ class MainWindow(QMainWindow):
 
         self.worker = DMWorker()
         self.worker.dm_ready.connect(self.on_dm_ready)
+        self.worker.input_requested.connect(self.on_input_requested)
         self.worker.start()
 
         # ========================= State & Connections =====================
@@ -150,8 +152,12 @@ class MainWindow(QMainWindow):
     def on_dm_ready(self, history: str, image_path: str) -> None:  # type: ignore[override]
         """Update the UI with the DM's response and re‑enable recording."""
         history = history.replace('**DM:**', '<b>DM:</b>').replace('**Player:**', '<b>Player:</b>')
+        history = re.sub(r'**Conversation with (.+):**', r'<b>Conversation with \1:</b>', history)
         self.history.setText(history)
         self.load_image(Path(image_path))
+
+    def on_input_requested(self) -> None:
+        """Request player input from the user."""
         self.record_btn.setEnabled(True)
 
     # ---------------------------------------------------------------- helpers
