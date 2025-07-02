@@ -33,7 +33,10 @@ from PyQt6.QtWidgets import (
 )
 
 from stt import WhisperSTT
-from wip2 import main
+from main import main
+
+# TODO no stop button - start is converted to stop once the recording is started
+# TODO one input button per player
 
 
 class DMWorker(QThread):

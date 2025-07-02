@@ -64,7 +64,7 @@ def generate_image(prompt: str, negative_prompt: str = NEGATIVE_PROMPT, n_images
                 continue
 
             filename = f'{int(time.time())}_{i}.png'
-            filename_path = Path('cache/images') / filename
+            filename_path = Path('save/images') / filename
             filename_path.parent.mkdir(parents=True, exist_ok=True)
 
             with open(filename_path, 'wb') as f:

@@ -36,15 +36,11 @@ T = TypeVar('T', bound=BaseModel)
 
 def llm_parse(messages: list[dict[str, str]], response_format: Type[T]) -> T:
     start = time.time()
-    res = (
-        client.beta.chat.completions.parse(
-            model=MODEL,
-            messages=messages,  # type: ignore
-            response_format=response_format,
-        )
-        .choices[0]
-        .message.parsed
+    res = client.beta.chat.completions.parse(
+        model=MODEL,
+        messages=messages,  # type: ignore
+        response_format=response_format,
     )
     print(f'LLM parse took {time.time() - start:.2f}s')
-    assert res is not None
-    return res
+    assert res.choices[0].message.parsed is not None
+    return res.choices[0].message.parsed

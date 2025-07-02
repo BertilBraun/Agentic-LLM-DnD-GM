@@ -73,7 +73,7 @@ class OpenAITTSAdapter(BaseTTS):
         id_hash = hashlib.sha256(
             text.encode() + self._instructions.encode() + self._voice_id.encode() + self._voice_model.encode()
         ).hexdigest()
-        output_path = Path(f'cache/tts/{id_hash}.wav')
+        output_path = Path(f'save/tts/{id_hash}.wav')
 
         if output_path.exists():
             with open(output_path, 'rb') as f:
