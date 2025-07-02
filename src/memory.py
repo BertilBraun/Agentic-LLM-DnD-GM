@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
 from pydantic import BaseModel, Field
 from datetime import datetime
 
@@ -28,15 +27,11 @@ class SimpleMemorySystem(BaseModel):
     # Short-term memory as list of recent events
     short_term_memory: list[str] = Field(default_factory=list, description='Recent events')
 
-    # Metadata
-    compression_count: int = Field(default=0)
-    last_compression: Optional[str] = Field(default=None)
-
     def add_event(self, event: str):
         """Add a new event to short-term memory"""
         self.short_term_memory.append(event.strip())
 
-    async def check_for_cutoff(self) -> bool:
+    def check_for_cutoff(self) -> bool:
         """Ask LLM if this is a good point to compress memory"""
         if len(self.short_term_memory) < 5:  # Need minimum events
             return False

@@ -48,6 +48,10 @@ def _translate_prompt(messages: list[dict[str, str]], language: str) -> list[dic
 def llm_chat(messages: list[dict[str, str]]) -> str:
     messages = _translate_prompt(messages, LANGUAGE)
 
+    messages = [
+        {'role': 'system', 'content': 'You will always respond in the same language as the messages you are given.'}
+    ] + messages
+
     start = time.time()
     res = client.chat.completions.create(
         model=MODEL,
@@ -63,6 +67,10 @@ T = TypeVar('T', bound=BaseModel)
 
 def llm_parse(messages: list[dict[str, str]], response_format: Type[T]) -> T:
     messages = _translate_prompt(messages, LANGUAGE)
+
+    messages = [
+        {'role': 'system', 'content': 'You will always respond in the same language as the messages you are given.'}
+    ] + messages
 
     start = time.time()
     res = client.beta.chat.completions.parse(

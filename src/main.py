@@ -321,12 +321,12 @@ class AppState(BaseModel):
     memory: SimpleMemorySystem = Field(default_factory=SimpleMemorySystem)
 
     def save(self):
-        STATE_SAVE_FILE.write_text(self.model_dump_json(indent=2))
+        STATE_SAVE_FILE.write_text(self.model_dump_json(indent=2), encoding='utf-8')
 
     @staticmethod
     def load():
         if STATE_SAVE_FILE.exists():
-            return AppState.model_validate_json(STATE_SAVE_FILE.read_text())
+            return AppState.model_validate_json(STATE_SAVE_FILE.read_text(encoding='utf-8'))
 
         # Create new campaign
         plan = interactive_planner()

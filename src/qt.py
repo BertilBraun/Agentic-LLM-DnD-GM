@@ -152,7 +152,6 @@ class MainWindow(QMainWindow):
     def on_dm_ready(self, history: str, image_path: str) -> None:  # type: ignore[override]
         """Update the UI with the DM's response and re‑enable recording."""
         history = history.replace('**DM:**', '<b>DM:</b>').replace('**Player:**', '<b>Player:</b>')
-        history = re.sub(r'**Conversation with (.+):**', r'<b>Conversation with \1:</b>', history)
         self.history.setText(history)
         self.load_image(Path(image_path))
 
