@@ -25,6 +25,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QMainWindow,
     QPushButton,
+    QStatusBar,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -36,7 +37,6 @@ from stt import WhisperSTT
 from main import main
 
 # TODO no stop button - start is converted to stop once the recording is started
-# TODO one input button per player
 
 
 class DMWorker(QThread):
@@ -82,14 +82,15 @@ class MainWindow(QMainWindow):
         self.history = QTextEdit()
         self.history.setReadOnly(True)
 
-        self.start_btn = QPushButton('Start Recording')
-        self.start_btn.setEnabled(False)
-        self.stop_btn = QPushButton('Stop Recording')
-        self.stop_btn.setEnabled(False)
+        self.record_btn = QPushButton('Start Recording')
+        self.record_btn.setFixedWidth(100)
+        self.record_btn.setFixedHeight(50)
+        self.record_btn.setEnabled(False)
 
         btn_row = QHBoxLayout()
-        btn_row.addWidget(self.start_btn)
-        btn_row.addWidget(self.stop_btn)
+        btn_row.addStretch()
+        btn_row.addWidget(self.record_btn)
+        btn_row.addStretch()
 
         layout = QVBoxLayout()
         layout.addWidget(self.image_label, stretch=3)
@@ -107,45 +108,51 @@ class MainWindow(QMainWindow):
         self.worker.dm_ready.connect(self.on_dm_ready)
         self.worker.start()
 
-        # ========================= Connections =============================
-        self.start_btn.clicked.connect(self.start_recording)
-        self.stop_btn.clicked.connect(self.stop_recording)
+        # ========================= State & Connections =====================
+        self.recording: bool = False
+        self.record_btn.clicked.connect(self.toggle_recording)
+
+        # Provide a status bar for user feedback if one doesn’t already exist
+        if self.statusBar() is None:
+            self.setStatusBar(QStatusBar(self))
 
     # ------------------------------------------------------------------ UI
-    def start_recording(self) -> None:
-        """Begin capturing player speech."""
-        try:
-            self.stt_model.start()
-        except RuntimeError as exc:
-            QMessageBox.critical(self, 'Recording Error', str(exc))
-            return
-        self.start_btn.setEnabled(False)
-        self.stop_btn.setEnabled(True)
-        self.statusBar().showMessage('Recording…')  # type: ignore[attr-defined]
+    def toggle_recording(self) -> None:
+        """Toggle between start and stop recording states."""
+        if not self.recording:
+            # -------- Begin recording --------
+            try:
+                self.stt_model.start()
+            except RuntimeError as exc:
+                QMessageBox.critical(self, 'Recording Error', str(exc))
+                return
+            self.recording = True
+            self.record_btn.setText('Stop Recording')
+            self.statusBar().showMessage('Recording…')  # type: ignore[attr-defined]
+        else:
+            # -------- End recording ----------
+            self.recording = False
+            self.record_btn.setEnabled(False)  # Disable until DM is ready
+            self.statusBar().clearMessage()  # type: ignore[attr-defined]
 
-    def stop_recording(self) -> None:
-        """Stop recording, transcribe, and hand text to the DM worker."""
-        try:
-            player_text = self.stt_model.close()
-        except RuntimeError as exc:
-            QMessageBox.warning(self, 'Error', str(exc))
-            return
+            try:
+                player_text = self.stt_model.close()
+            except RuntimeError as exc:
+                QMessageBox.warning(self, 'Error', str(exc))
+                return
 
-        self.worker.push_player_text(player_text)
-        self.history.append(f'<b>Player:</b> {player_text}')
+            self.record_btn.setText('Start Recording')
 
-        self.start_btn.setEnabled(False)
-        self.stop_btn.setEnabled(False)
-        self.statusBar().clearMessage()  # type: ignore[attr-defined]
+            self.worker.push_player_text(player_text)
+            self.history.append(f'<b>Player:</b> {player_text}')
 
     # ---------------------------------------------------------------- slots
     def on_dm_ready(self, history: str, image_path: str) -> None:  # type: ignore[override]
-        """Update the UI with the DM's response and the new scene image."""
+        """Update the UI with the DM's response and re‑enable recording."""
+        history = history.replace('**DM:**', '<b>DM:</b>').replace('**Player:**', '<b>Player:</b>')
         self.history.setText(history)
         self.load_image(Path(image_path))
-        self.start_btn.setEnabled(True)
-        self.stop_btn.setEnabled(False)
-        self.statusBar().clearMessage()  # type: ignore[attr-defined]
+        self.record_btn.setEnabled(True)
 
     # ---------------------------------------------------------------- helpers
     def load_image(self, path: Path) -> None:

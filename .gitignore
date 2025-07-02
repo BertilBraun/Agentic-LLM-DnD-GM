@@ -2,7 +2,7 @@
 
 src/config.py
 
-**/**.wav
-**/**.png
+**/save/**
+
 
 **/.sesskey

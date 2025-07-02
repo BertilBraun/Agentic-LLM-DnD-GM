@@ -19,9 +19,8 @@ from config import OPENAI_API_KEY
 # TODO allow translation to German
 # TODO allow stt from German
 # TODO compress the conversation history once it gets too long or a clear cutoff point is reached -> after f.e. going somewhere, where they can't go back and cannot interact with the history anymore (i.e. no other characters are around), then the history can be compressed
-# TODO multiple players
 
-STATE_SAVE_FILE = Path('save/save_state.json')
+STATE_SAVE_FILE = Path('save/state.json')
 STATE_SAVE_FILE.parent.mkdir(parents=True, exist_ok=True)
 
 DM_TTS_INSTRUCTIONS = (
@@ -235,7 +234,7 @@ def image(description: str, visual_style: str) -> Path:
     return image
 
 
-def npc_loop(npc: NPC, stt_model: WhisperSTT, plan: CampaignPlan) -> Generator[UiUpdate, None, str]:
+def npc_loop(npc: NPC, player_input: Callable[[], str], plan: CampaignPlan) -> Generator[UiUpdate, None, str]:
     # Generate NPC portrait at start of conversation
     npc_image = image(npc.visual_description, f'{plan.visual_style}, character portrait')
     yield UiUpdate(history='', image=npc_image)
@@ -266,15 +265,15 @@ Remember: You are having a real conversation with an adventurer in your world. R
 
     while True:
         print(f'🎙️  Speak with {npc.name}: ')
-        player_input = stt(stt_model)
-        print(f'Player: {player_input}')
-        messages.append({'role': 'user', 'content': player_input})
+        player_text = player_input()
+        print(f'Player: {player_text}')
+        messages.append({'role': 'user', 'content': player_text})
 
         npc_msg = llm_parse(messages, NPCMessage)
 
         print(f'{npc.name}: {npc_msg.npc_speech}')
         tts.play(npc_msg.npc_speech)
-        transcript.append(f'Player: {player_input}\n{npc.name}: {npc_msg.npc_speech}')
+        transcript.append(f'Player: {player_text}\n{npc.name}: {npc_msg.npc_speech}')
         messages.append({'role': 'assistant', 'content': npc_msg.npc_speech})
 
         yield UiUpdate(history='\n\n'.join(transcript), image=npc_image)
@@ -355,7 +354,6 @@ def main(player_input: Callable[[], str]) -> Generator[UiUpdate, None, None]:
 
     assert app_state.plan is not None
 
-    stt_model = WhisperSTT(model_name='base')
     dm_tts = create_tts(voice_id='ash', instructions=DM_TTS_INSTRUCTIONS)
 
     print('\n🎲 Starting your D&D adventure! Speak your actions and the DM will respond.\n')
@@ -398,7 +396,7 @@ def main(player_input: Callable[[], str]) -> Generator[UiUpdate, None, None]:
             # Spawn NPC if ordered
             if dm_out.npc:
                 print(f'\n💬 {dm_out.npc.name} wants to talk with you...')
-                interaction_summary = yield from npc_loop(dm_out.npc, stt_model, app_state.plan)
+                interaction_summary = yield from npc_loop(dm_out.npc, player_input, app_state.plan)
                 app_state.append_memory(interaction_summary)
                 print('\n🎭 Back to the main adventure...\n')
     finally:
@@ -406,9 +404,10 @@ def main(player_input: Callable[[], str]) -> Generator[UiUpdate, None, None]:
 
 
 if __name__ == '__main__':
-    stt_model = WhisperSTT(model_name='base')
+    stt_model = WhisperSTT(model_name='base')  # Expensive one time model load
 
     def player_input():
         return stt(stt_model)
 
-    main(player_input)
+    for _ in main(player_input):
+        pass
