@@ -14,11 +14,9 @@ from llm import llm_parse, llm_chat
 
 from image import generate_image
 
-from config import OPENAI_API_KEY
+from memory import SimpleMemorySystem
 
-# TODO allow translation to German
-# TODO allow stt from German
-# TODO compress the conversation history once it gets too long (based on campaign save schema?) or a clear cutoff point is reached -> after f.e. going somewhere, where they can't go back and cannot interact with the history anymore (i.e. no other characters are around), then the history can be compressed
+from config import LANGUAGE, OPENAI_API_KEY
 
 STATE_SAVE_FILE = Path('save/state.json')
 STATE_SAVE_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -174,14 +172,16 @@ Focus on creating memorable moments and meaningful player choices.""",
     return llm_parse(messages, CampaignPlan)
 
 
-def dm_turn(player_text: str, plan: CampaignPlan, memory: str) -> DMResponse:
+def dm_turn(player_text: str, app_state: AppState) -> DMResponse:
+    """DM turn with automatic memory management"""
+
     prompt = f"""You are an expert Dungeon Master running a D&D campaign. Your role is to create immersive, engaging experiences that respond meaningfully to player actions.
 
 ===== CAMPAIGN CONTEXT =====
-{plan.model_dump_json(indent=2)}
+{app_state.plan.model_dump_json(indent=2)}
 
 ===== CURRENT GAME STATE =====
-{memory}
+{app_state.get_memory_for_dm()}
 
 ===== PLAYER ACTION =====
 {player_text}
@@ -209,11 +209,19 @@ Respond as the DM by:
 - Include specific details about location, lighting, objects, creatures, architecture
 - Mention colors, textures, spatial relationships, weather, atmosphere
 - Be extremely specific and detailed (400-800 characters)
-- Always incorporate the campaign's visual_style: {plan.visual_style}
+- Always incorporate the campaign's visual_style: {app_state.plan.visual_style}
 
 **Tone:** Match the campaign's established tone while maintaining dramatic tension and player engagement."""
 
     response = llm_parse([{'role': 'user', 'content': prompt}], DMResponse)
+
+    # Add to memory
+    memory_entry = f"""**Player:** {player_text}
+**DM:** {response.gm_speech}
+**Memory Note:** {response.memory_append}"""
+
+    app_state.append_memory(memory_entry)
+
     print(f'🎭 DM: {response.gm_speech}')
     return response
 
@@ -310,7 +318,7 @@ class AppState(BaseModel):
     plan: CampaignPlan
     current_scene_image: Optional[Path]
     current_npc: Optional[NPC]
-    _memory: str
+    memory: SimpleMemorySystem = Field(default_factory=SimpleMemorySystem)
 
     def save(self):
         STATE_SAVE_FILE.write_text(self.model_dump_json(indent=2))
@@ -320,21 +328,30 @@ class AppState(BaseModel):
         if STATE_SAVE_FILE.exists():
             return AppState.model_validate_json(STATE_SAVE_FILE.read_text())
 
-        # No campaign loaded, create a new one
+        # Create new campaign
         plan = interactive_planner()
         print(f'\n✨ Campaign created: {plan.title}')
         print(f'📖 Synopsis: {plan.synopsis}')
-        app_state = AppState(plan=plan, current_scene_image=None, current_npc=None, _memory='')
+
+        app_state = AppState(plan=plan, current_scene_image=None, current_npc=None, memory=SimpleMemorySystem())
         app_state.save()
         return app_state
 
-    def append_memory(self, chunk: str):
-        self._memory += chunk.strip() + '\n\n'
+    def append_memory(self, event: str):
+        """Add event and check if compression is needed"""
+        self.memory.add_event(event)
+
+        # Check if we should compress
+        if self.memory.check_for_cutoff():
+            self.memory.compress_memory()
+
         self.save()
 
-    def get_memory(self) -> str:
+    def get_memory_for_dm(self) -> str:
+        """Get formatted memory for DM context"""
+
         acts = '\n'.join([f'**Act {i + 1}:** {act}' for i, act in enumerate(self.plan.acts)])
-        return f"""# Campaign: {self.plan.title}
+        base_context = f"""# Campaign: {self.plan.title}
 
 ## Synopsis
 {self.plan.synopsis}
@@ -342,9 +359,13 @@ class AppState(BaseModel):
 ## Story Structure
 {acts}
 
-## Current Scene
-{self._memory}
 """
+        return base_context + self.memory.get_full_context()
+
+
+# ───────────────────────────────────────────────────────────────
+# Main Loop
+# ───────────────────────────────────────────────────────────────
 
 
 class UiUpdate(BaseModel):
@@ -353,17 +374,19 @@ class UiUpdate(BaseModel):
 
 
 def main(player_input: Callable[[], str]) -> Generator[UiUpdate, None, None]:
+    """Main game loop with enhanced memory management"""
     app_state = AppState.load()
 
     dm_tts = create_tts(voice_id='ash', instructions=DM_TTS_INSTRUCTIONS)
 
     print('\n🎲 Starting your D&D adventure! Speak your actions and the DM will respond.\n')
 
+    # Initial scene
     dm_out = dm_turn(
         "Describe the current situation, since the players are just arriving in the world and don't know what's going on",
-        app_state.plan,
-        app_state.get_memory(),
+        app_state,
     )
+
     if app_state.current_scene_image is None:
         app_state.current_scene_image = image(dm_out.scene_description, app_state.plan.visual_style)
 
@@ -374,10 +397,11 @@ def main(player_input: Callable[[], str]) -> Generator[UiUpdate, None, None]:
 
     try:
         while True:
-            # Collect player speech
+            # Get player input
             player_text = player_input()
-            # DM step
-            dm_out = dm_turn(player_text, app_state.plan, app_state.get_memory())
+
+            # DM response with automatic memory management
+            dm_out = dm_turn(player_text, app_state)
 
             # Generate scene image
             app_state.current_scene_image = image(dm_out.scene_description, app_state.plan.visual_style)
@@ -387,28 +411,34 @@ def main(player_input: Callable[[], str]) -> Generator[UiUpdate, None, None]:
 
             dm_tts.play(dm_out.gm_speech)
 
-            app_state.append_memory(
-                f"""
-**Player:** {player_text}
-**DM:** {dm_out.gm_speech}
-**Update:** {dm_out.memory_append}
-"""
-            )
-            # Spawn NPC if ordered
+            # Handle NPC interactions
             if dm_out.npc:
                 print(f'\n💬 {dm_out.npc.name} wants to talk with you...')
                 interaction_summary = yield from npc_loop(dm_out.npc, player_input, app_state.plan)
-                app_state.append_memory(interaction_summary)
+                app_state.append_memory(f'**NPC Interaction:** {interaction_summary}')
                 print('\n🎭 Back to the main adventure...\n')
+
     finally:
         app_state.save()
 
 
 if __name__ == '__main__':
-    stt_model = WhisperSTT(model_name='base')  # Expensive one time model load
+    import argparse
 
-    def player_input():
-        return stt(stt_model)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--cli', action='store_true')
+    args = parser.parse_args()
 
-    for _ in main(player_input):
-        pass
+    if args.cli:
+        stt_model = WhisperSTT(model_name='base', language=LANGUAGE)  # Expensive - therefore only load once
+
+        def player_input():
+            return stt(stt_model)
+
+        for _ in main(player_input):
+            pass
+
+    else:
+        from qt import gui_main
+
+        gui_main()
