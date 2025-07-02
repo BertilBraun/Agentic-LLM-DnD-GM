@@ -215,13 +215,6 @@ Respond as the DM by:
 
     response = llm_parse([{'role': 'user', 'content': prompt}], DMResponse)
 
-    # Add to memory
-    memory_entry = f"""**Player:** {player_text}
-**DM:** {response.gm_speech}
-**Memory Note:** {response.memory_append}"""
-
-    app_state.append_memory(memory_entry)
-
     print(f'🎭 DM: {response.gm_speech}')
     return response
 
@@ -387,7 +380,7 @@ def main(player_input: Callable[[], str]) -> Generator[UiUpdate, None, None]:
         app_state,
     )
 
-    if app_state.current_scene_image is None:
+    if app_state.current_scene_image is None or not app_state.current_scene_image.exists():
         app_state.current_scene_image = image(dm_out.scene_description, app_state.plan.visual_style)
 
     history = f'**DM:** {dm_out.gm_speech}'
@@ -410,6 +403,13 @@ def main(player_input: Callable[[], str]) -> Generator[UiUpdate, None, None]:
             yield UiUpdate(history=history, image=app_state.current_scene_image)
 
             dm_tts.play(dm_out.gm_speech)
+
+            # Add to memory
+            memory_entry = f"""**Player:** {player_text}
+**DM:** {dm_out.gm_speech}
+**Memory Note:** {dm_out.memory_append}"""
+
+            app_state.append_memory(memory_entry)
 
             # Handle NPC interactions
             if dm_out.npc:

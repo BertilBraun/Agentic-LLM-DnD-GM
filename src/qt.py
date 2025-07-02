@@ -13,7 +13,6 @@ Key features
 
 from __future__ import annotations
 
-import re
 import sys
 import queue
 from pathlib import Path
