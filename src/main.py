@@ -50,6 +50,86 @@ def create_tts(voice_id: str, instructions: str) -> BaseTTS:
 
 
 # ───────────────────────────────────────────────────────────────
+# Character Creation System
+# ───────────────────────────────────────────────────────────────
+class PlayerCharacter(BaseModel):
+    name: str = Field(description='Character name')
+    background: str = Field(description='Character background, origin story, and personality')
+    class_and_level: str = Field(
+        description='Character class, level, and progression (e.g., "Level 3 Wizard", "Novice Fighter")'
+    )
+    abilities: List[str] = Field(
+        description='List of specific abilities, spells, skills, and powers the character possesses'
+    )
+    equipment: List[str] = Field(description='Weapons, armor, magical items, tools, and other possessions')
+    limitations: List[str] = Field(
+        description='Character weaknesses, restrictions, moral codes, or things they cannot do'
+    )
+    power_level: Literal['Novice', 'Apprentice', 'Journeyman', 'Expert', 'Master', 'Legendary'] = Field(
+        description='Overall power level to help DM balance encounters and challenges appropriately'
+    )
+    visual_description: str = Field(
+        description='Detailed physical appearance for character portrait generation (300-500 characters)'
+    )
+
+
+def create_character() -> PlayerCharacter:
+    """Interactive character creation process"""
+    print('=== CHARACTER CREATION ===')
+    print("Let's create your D&D character! This will help the DM tailor the adventure to your abilities.\n")
+
+    messages = [
+        {
+            'role': 'system',
+            'content': """You are a helpful D&D character creation assistant. Guide the player through creating a balanced, interesting character by asking focused questions about:
+
+1. Character concept and background
+2. Class/profession and experience level  
+3. Key abilities and skills they want
+4. Equipment and possessions
+5. Character limitations and weaknesses
+6. Physical appearance
+
+Ask 4-6 questions total. Build on their answers and help them create a character that's both powerful enough to be interesting but balanced enough for good gameplay. Encourage them to include both strengths AND meaningful limitations.
+
+Keep questions conversational and help them think through the implications of their choices.""",
+        },
+        {
+            'role': 'user',
+            'content': 'I want to create a character for a D&D campaign. Help me build someone interesting and balanced.',
+        },
+    ]
+
+    while True:
+        q = llm_chat(messages)
+        messages.append({'role': 'assistant', 'content': q})
+        print(f'[Character Creator] {q}')
+        a = input('("done" to finish character) >> ').strip()
+        if a.lower() == 'done':
+            break
+        messages.append({'role': 'user', 'content': a})
+
+    print('\nGenerating character sheet...')
+
+    messages.append(
+        {
+            'role': 'user',
+            'content': """Now create a complete PlayerCharacter based on our discussion. Ensure:
+
+- The character has clear strengths AND meaningful limitations
+- Power level matches their described abilities realistically
+- Equipment list is appropriate for their background and level
+- Abilities are specific enough for the DM to reference during gameplay
+- Visual description is detailed enough for portrait generation
+
+Balance is key - even powerful characters should have interesting limitations or challenges.""",
+        }
+    )
+
+    return llm_parse(messages, PlayerCharacter)
+
+
+# ───────────────────────────────────────────────────────────────
 # Response models with enhanced field descriptions
 # ───────────────────────────────────────────────────────────────
 class CampaignPlan(BaseModel):
@@ -64,6 +144,9 @@ class CampaignPlan(BaseModel):
     )
     visual_style: str = Field(
         description='Detailed visual style guide (400-600 characters) defining the artistic direction for all generated images: art style (digital painting, fantasy art, etc.), color palette, lighting preferences, atmosphere, level of detail, and any specific visual themes that should be consistent across all scenes'
+    )
+    character_context: str = Field(
+        description="Summary of how the campaign will be balanced around the player character's abilities and power level"
     )
 
 
@@ -120,26 +203,31 @@ class ConversationSummary(BaseModel):
 # ───────────────────────────────────────────────────────────────
 # Agents with enhanced prompts
 # ───────────────────────────────────────────────────────────────
-def interactive_planner() -> CampaignPlan:
+def interactive_planner(character: PlayerCharacter) -> CampaignPlan:
     """Ask questions until the user hits Ctrl-C or says 'done'."""
     campaign_title = input('Enter the campaign title: ')
     messages = [
         {
             'role': 'system',
-            'content': """You are an expert D&D campaign designer. Your goal is to create an engaging, well-structured campaign through targeted questions.
+            'content': f"""You are an expert D&D campaign designer. Your goal is to create an engaging, well-structured campaign tailored to the player character.
+
+PLAYER CHARACTER:
+{character.model_dump_json(indent=2)}
+
+The campaign should be balanced around this character's power level ({character.power_level}) and incorporate their abilities, background, and limitations into the story.
 
 Ask 3-5 focused questions to understand:
-1. Genre/theme preferences (high fantasy, dark fantasy, political intrigue, etc.)
+1. Genre/theme preferences that would complement their character
 2. Tone (heroic, gritty, comedic, mystery, etc.)
-3. Key story elements they want to include
-4. Campaign length/scope preferences
-5. Any specific settings, conflicts, or character types they're excited about
+3. How they want their character's abilities to be challenged
+4. Story elements that would engage their character's background
+5. Any specific conflicts or character growth they want to explore
 
-Keep questions concise and build on previous answers. Help them create something they'll be excited to run.""",
+Keep questions concise and build on previous answers. Help them create something that showcases their character.""",
         },
         {
             'role': 'user',
-            'content': f'I want to create a D&D campaign titled "{campaign_title}". Help me develop this into a full campaign plan.',
+            'content': f'I want to create a D&D campaign titled "{campaign_title}" for my character {character.name}. Help me develop this into a full campaign plan.',
         },
     ]
 
@@ -156,16 +244,18 @@ Keep questions concise and build on previous answers. Help them create something
 
     messages.append(
         {
-            'role': 'system',
-            'content': """Now create a complete CampaignPlan based on our discussion. Ensure:
+            'role': 'user',
+            'content': f"""Now create a complete CampaignPlan based on our discussion and the character profile. Ensure:
 
-- The title captures the campaign's essence
-- The synopsis establishes clear stakes and hooks
-- Each act builds logically toward a satisfying conclusion
-- The plan provides enough structure for improvisation
-- Story elements incorporate the user's preferences
+- The campaign is appropriately balanced for a {character.power_level} level character
+- Challenges will test their abilities without being impossible
+- Story elements connect to their background and motivations
+- The character_context explains how encounters/challenges will be scaled
+- NPCs and conflicts are appropriate for their power level
 
-Focus on creating memorable moments and meaningful player choices.""",
+Character Power Level: {character.power_level}
+Character Abilities: {', '.join(character.abilities)}
+Character Limitations: {', '.join(character.limitations)}""",
         }
     )
 
@@ -173,9 +263,12 @@ Focus on creating memorable moments and meaningful player choices.""",
 
 
 def dm_turn(player_text: str, app_state: AppState) -> DMResponse:
-    """DM turn with automatic memory management"""
+    """DM turn with character-aware validation"""
 
-    prompt = f"""You are an expert Dungeon Master running a D&D campaign. Your role is to create immersive, engaging experiences that respond meaningfully to player actions.
+    prompt = f"""You are an expert Dungeon Master running a D&D campaign. Your role is to create immersive, engaging experiences that respond meaningfully to player actions while respecting character limitations.
+
+===== PLAYER CHARACTER =====
+{app_state.character.model_dump_json(indent=2)}
 
 ===== CAMPAIGN CONTEXT =====
 {app_state.plan.model_dump_json(indent=2)}
@@ -187,14 +280,22 @@ def dm_turn(player_text: str, app_state: AppState) -> DMResponse:
 {player_text}
 
 ===== INSTRUCTIONS =====
-Respond as the DM by:
+Before responding, consider:
+1. **Can the character actually do this?** Check their abilities, equipment, and limitations
+2. **Is this appropriate for their power level?** Scale challenges accordingly
+3. **How do their abilities affect the outcome?** Use their specific skills and equipment
 
-1. **Acknowledge the player's action** - Show how their choice affects the world
-2. **Paint the scene** - Use vivid, sensory descriptions to bring the world to life
-3. **Advance the story** - Move the narrative forward while staying true to the campaign plan
-4. **Create meaningful choices** - Present opportunities for player agency and decision-making
-5. **Maintain consistency** - Respect established world rules and previous events
-6. **Describe the scene visually** - Provide extremely detailed visual description for image generation
+Then respond as the DM by:
+1. **Validate the action** - If impossible for their character, explain why gently and offer alternatives
+2. **Acknowledge the action** - Show how their abilities and choices affect the world
+3. **Paint the scene** - Use vivid descriptions appropriate to their power level
+4. **Advance the story** - Create challenges that test their specific abilities
+5. **Maintain balance** - Ensure encounters match their character's capabilities
+
+**Character Validation Examples:**
+- If they try to cast a spell not in their abilities: "Your character doesn't know that spell, but you could try [alternative]"
+- If they attempt something beyond their power level: "That would be challenging for a {app_state.character.power_level} character, but you could [scaled approach]"
+- If they use a listed ability: Describe it working effectively and having meaningful impact
 
 **Guidelines:**
 - Use "you" to address the player directly
@@ -211,7 +312,7 @@ Respond as the DM by:
 - Be extremely specific and detailed (400-800 characters)
 - Always incorporate the campaign's visual_style: {app_state.plan.visual_style}
 
-**Tone:** Match the campaign's established tone while maintaining dramatic tension and player engagement."""
+**Tone:** Match the campaign's tone while respecting character limitations and celebrating their unique abilities."""
 
     response = llm_parse([{'role': 'user', 'content': prompt}], DMResponse)
 
@@ -308,6 +409,7 @@ Format as clear, actionable bullet points the GM can reference later.""",
 
 
 class AppState(BaseModel):
+    character: PlayerCharacter
     plan: CampaignPlan
     current_scene_image: Optional[Path]
     current_npc: Optional[NPC]
@@ -321,12 +423,27 @@ class AppState(BaseModel):
         if STATE_SAVE_FILE.exists():
             return AppState.model_validate_json(STATE_SAVE_FILE.read_text(encoding='utf-8'))
 
-        # Create new campaign
-        plan = interactive_planner()
-        print(f'\n✨ Campaign created: {plan.title}')
+        # Create new character and campaign
+        character = create_character()
+        print(f'\n✨ Character created: {character.name}')
+        print(f'🎭 Class: {character.class_and_level}')
+        print(f'⚡ Power Level: {character.power_level}')
+
+        plan = interactive_planner(character)
+        print(f'\n🏰 Campaign created: {plan.title}')
         print(f'📖 Synopsis: {plan.synopsis}')
 
-        app_state = AppState(plan=plan, current_scene_image=None, current_npc=None, memory=SimpleMemorySystem())
+        # Generate character portrait
+        character_image = image(character.visual_description, f'{plan.visual_style}, character portrait')
+        print(f'🖼️ Character portrait: {character_image}')
+
+        app_state = AppState(
+            character=character,
+            plan=plan,
+            current_scene_image=None,
+            current_npc=None,
+            memory=SimpleMemorySystem(),
+        )
         app_state.save()
         return app_state
 
@@ -336,17 +453,30 @@ class AppState(BaseModel):
         self.save()
 
     def get_memory_for_dm(self) -> str:
-        """Get formatted memory for DM context"""
-
+        """Get formatted memory for DM context including character info"""
         acts = '\n'.join([f'**Act {i + 1}:** {act}' for i, act in enumerate(self.plan.acts)])
+
+        character_summary = f"""
+## Player Character: {self.character.name}
+- **Class/Level:** {self.character.class_and_level}
+- **Power Level:** {self.character.power_level}
+- **Key Abilities:** {', '.join(self.character.abilities)}
+- **Equipment:** {', '.join(self.character.equipment)}
+- **Limitations:** {', '.join(self.character.limitations)}
+"""
+
         base_context = f"""# Campaign: {self.plan.title}
 
 ## Synopsis
 {self.plan.synopsis}
 
+## Character Balance Notes
+{self.plan.character_context}
+
 ## Story Structure
 {acts}
 
+{character_summary}
 """
         return base_context + self.memory.get_full_context()
 
@@ -362,16 +492,19 @@ class UiUpdate(BaseModel):
 
 
 def main(player_input: Callable[[], str]) -> Generator[UiUpdate, None, None]:
-    """Main game loop with enhanced memory management"""
+    """Main game loop with character-aware gameplay"""
     app_state = AppState.load()
 
     dm_tts = create_tts(voice_id='ash', instructions=DM_TTS_INSTRUCTIONS)
 
-    print('\n🎲 Starting your D&D adventure! Speak your actions and the DM will respond.\n')
+    print(f'\n🎲 Starting your D&D adventure as {app_state.character.name}!')
+    print(f'⚡ Power Level: {app_state.character.power_level}')
+    print(f'🎭 {app_state.character.class_and_level}')
+    print("Speak your actions and the DM will respond based on your character's abilities.\n")
 
-    # Initial scene
+    # Initial scene with character context
     dm_out = dm_turn(
-        "Describe the current situation, since the players are just arriving in the world and don't know what's going on",
+        f'Describe the opening scene for {app_state.character.name}. Set up the initial situation that draws them into the adventure, taking into account their background and current circumstances.',
         app_state,
     )
 
