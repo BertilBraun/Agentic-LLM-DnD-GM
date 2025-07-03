@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Callable, Generator, List, Literal, Optional
 
@@ -436,6 +437,8 @@ class AppState(BaseModel):
         # Generate character portrait
         character_image = image(character.visual_description, f'{plan.visual_style}, character portrait')
         print(f'🖼️ Character portrait: {character_image}')
+        # open up the character image in the default image viewer
+        os.system(f'start {character_image}')
 
         app_state = AppState(
             character=character,
