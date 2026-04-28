@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LLM-DnD — Architecture</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+:root {
+  --bg:#0f1117; --surface:#1a1d27; --surface2:#22263a; --border:#2e3250;
+  --text:#e2e8f0; --muted:#8892b0;
+  --purple:#7c6af7; --teal:#4ecdc4; --amber:#f7b731;
+  --red:#ff6b6b; --green:#48c774; --blue:#3d9be9;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;font-size:14px;line-height:1.6}
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:18px 36px;display:flex;align-items:baseline;gap:16px}
+header h1{font-size:20px;color:var(--purple)}
+header span{color:var(--muted);font-size:12px}
+nav{display:flex;background:var(--surface);border-bottom:1px solid var(--border);padding:0 36px;overflow-x:auto;gap:0}
+.tab{padding:11px 18px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;white-space:nowrap;font-size:13px;transition:color .15s,border-color .15s}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--purple);border-bottom-color:var(--purple)}
+main{padding:28px 36px;max-width:1500px}
+.panel{display:none}.panel.active{display:block}
+h2{font-size:17px;color:var(--teal);margin-bottom:6px}
+h3{font-size:14px;color:var(--amber);margin:22px 0 8px;font-weight:600}
+p{color:var(--muted);margin-bottom:10px;font-size:13px}
+
+/* mermaid wrapper */
+.diagram{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px;margin:12px 0;overflow-x:auto}
+
+/* card grids */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin:10px 0}
+.grid-wide{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;margin:10px 0}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px}
+.card-port{font-size:10px;color:var(--muted);font-family:monospace;margin-bottom:3px}
+.card-name{font-weight:700;margin-bottom:5px;font-size:13px}
+.card-desc{font-size:11px;color:var(--muted)}
+.card-tags{display:flex;flex-wrap:wrap;gap:3px;margin-top:7px}
+.tag{font-size:10px;padding:1px 6px;border-radius:20px;font-family:monospace}
+.tp{background:#3b1f8c33;color:#b09cff;border:1px solid #5a38cc44}
+.tt{background:#0d3d3a33;color:var(--teal);border:1px solid #1d7a7444}
+.ta{background:#3d2a0033;color:var(--amber);border:1px solid #7a550033}
+.tr{background:#3d000033;color:var(--red);border:1px solid #7a000044}
+.tg{background:#003d1833;color:var(--green);border:1px solid #007a3044}
+.tb{background:#003d6a33;color:var(--blue);border:1px solid #005a9944}
+.bl-p{border-left:3px solid var(--purple)}
+.bl-t{border-left:3px solid var(--teal)}
+.bl-a{border-left:3px solid var(--amber)}
+.bl-r{border-left:3px solid var(--red)}
+.bl-g{border-left:3px solid var(--green)}
+.bl-b{border-left:3px solid var(--blue)}
+
+/* DB tables */
+.db-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;margin:10px 0}
+.dbt{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.dbt-head{padding:9px 14px;font-weight:700;font-size:12px;display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--border)}
+.dbt table{width:100%;border-collapse:collapse;font-size:11px}
+.dbt thead th{background:var(--surface2);padding:5px 12px;text-align:left;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border)}
+.dbt tbody td{padding:5px 12px;border-bottom:1px solid #1e2236}
+.dbt tbody tr:last-child td{border-bottom:none}
+.dbt tbody tr:hover td{background:var(--surface2)}
+.ct{font-family:monospace;color:var(--amber)}
+.cc{font-size:9px;color:var(--green);font-family:monospace}
+.cpk{color:var(--amber);font-weight:700}
+.cfk{color:var(--blue)}
+
+/* tools */
+.tool-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;margin:8px 0}
+.tool{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:12px}
+.tool-name{font-family:monospace;color:var(--teal);font-size:12px;font-weight:700;margin-bottom:3px}
+.tool-io{font-family:monospace;font-size:10px;color:var(--muted);line-height:1.7}
+.tool-io b{color:var(--amber)}
+
+/* flow steps */
+.steps{margin:8px 0}
+.step{display:flex;gap:12px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--border)}
+.step:last-child{border-bottom:none}
+.stepn{background:var(--purple);color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;margin-top:2px}
+.stepb{flex:1}
+.stept{font-weight:600;font-size:13px;margin-bottom:2px}
+.stepd{font-size:11px;color:var(--muted)}
+.stepd code{font-family:monospace;color:var(--amber);background:var(--surface2);padding:1px 4px;border-radius:3px}
+
+/* routing table */
+.route-table{width:100%;border-collapse:collapse;font-size:12px;margin:10px 0}
+.route-table th{background:var(--surface2);padding:7px 12px;text-align:left;color:var(--muted);border-bottom:1px solid var(--border)}
+.route-table td{padding:7px 12px;border-bottom:1px solid #1e2236;font-family:monospace}
+.route-table tr:hover td{background:var(--surface2)}
+</style>
+</head>
+<body>
+<header>
+  <h1>⚔️ LLM-DnD Architecture</h1>
+  <span>A2A Distributed Agents · v2.0 · 2026-04-28 · 20 containers</span>
+</header>
+<nav>
+  <div class="tab active" onclick="show('overview',this)">Overview</div>
+  <div class="tab" onclick="show('services',this)">Services</div>
+  <div class="tab" onclick="show('postgres',this)">PostgreSQL</div>
+  <div class="tab" onclick="show('qdrant',this)">Qdrant</div>
+  <div class="tab" onclick="show('neo4j',this)">Neo4j</div>
+  <div class="tab" onclick="show('mcp',this)">MCP Tools</div>
+  <div class="tab" onclick="show('agents',this)">Agents</div>
+  <div class="tab" onclick="show('npc',this)">NPC Conversations</div>
+  <div class="tab" onclick="show('flows',this)">Turn Flows</div>
+</nav>
+<main>
+
+<!-- ═══════════════════════════════════════ OVERVIEW -->
+<div class="panel active" id="panel-overview">
+  <h2>System Architecture</h2>
+  <p>End-to-end: Browser → API gateway → 5 A2A agent microservices → 4 MCP servers → data stores → 4 provider services → external APIs.</p>
+  <div class="diagram">
+<div class="mermaid">
+flowchart TB
+    B["Browser\nReact 18 SPA"]
+
+    subgraph GW["api :8000 — Gateway"]
+      direction LR
+      AU["JWT Auth"] --- DI["A2A Dispatcher"] --- PU["SSE Publisher"]
+    end
+
+    RE[("Redis\n:6379")]
+
+    subgraph AG["A2A Agent Microservices"]
+      direction LR
+      CC["character-creator\n:8010"]
+      CD["campaign-designer\n:8011"]
+      DM["dm-agent\n:8012"]
+      NP["npc-agent\n:8013"]
+      MA["memory-agent\n:8014"]
+    end
+
+    subgraph MC["MCP Servers — HTTP tool protocol"]
+      direction LR
+      SM["state-mcp\n:8001"]
+      MM["memory-mcp\n:8002"]
+      KM["knowledge-mcp\n:8003"]
+      MD["media-mcp\n:8004"]
+    end
+
+    subgraph DB["Data Stores"]
+      direction LR
+      PG[("PostgreSQL\n:5432")]
+      QD[("Qdrant\n:6333")]
+      NE[("Neo4j\n:7687")]
+    end
+
+    subgraph PR["Provider Services"]
+      direction LR
+      LS["llm-service\n:9001"]
+      IS["image-service\n:9002"]
+      TS["tts-service\n:9003"]
+      SS["stt-service\n:9004"]
+    end
+
+    B -- "REST + SSE" --> GW
+    PU -- "PUBLISH" --> RE
+    RE -- "SUBSCRIBE" --> B
+    DI -- "A2A JSON-RPC" --> AG
+
+    DM -- "A2A" --> MA
+    NP -- "A2A" --> MA
+
+    AG -- "X-Campaign-ID" --> MC
+    SM --> PG
+    MM --> QD
+    KM --> NE
+
+    AG --> PR
+    MC --> PR
+
+    PR --> EXT(("External\nAPIs"))
+</div>
+  </div>
+
+  <h3>Architecture Principles</h3>
+  <div class="grid">
+    <div class="card bl-p">
+      <div class="card-name">A2A Protocol</div>
+      <div class="card-desc">Each agent is an independent FastAPI service. API dispatcher reads routing state and sends JSON-RPC 2.0 <code>tasks/send</code>.</div>
+    </div>
+    <div class="card bl-t">
+      <div class="card-name">Routing Table</div>
+      <div class="card-desc">Dispatcher is a pure lookup: (phase, active_npc_id) → agent URL. No business logic in the gateway.</div>
+    </div>
+    <div class="card bl-a">
+      <div class="card-name">MCP Tool Protocol</div>
+      <div class="card-desc">Agents call data stores via HTTP MCP servers. <code>X-Campaign-ID</code> header injected transparently — no manual filtering.</div>
+    </div>
+    <div class="card bl-g">
+      <div class="card-name">4 Provider Services</div>
+      <div class="card-desc">LLM, image, TTS, and STT are separate adapters. Swap any backend (Gemini↔Anthropic, ElevenLabs↔OpenAI) without touching agents.</div>
+    </div>
+    <div class="card bl-r">
+      <div class="card-name">Memory-Agent Bridge</div>
+      <div class="card-desc">DM and NPC agents never touch memory-mcp directly. memory-agent owns STM/LTM compression and returns consolidated context.</div>
+    </div>
+    <div class="card bl-b">
+      <div class="card-name">Campaign Isolation</div>
+      <div class="card-desc">Every Postgres row, Qdrant point, and Neo4j node carries campaign_id. All indexes are composite — no cross-campaign leakage possible.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ SERVICES -->
+<div class="panel" id="panel-services">
+  <h2>Services &amp; Ports</h2>
+  <p>20 Docker containers. Each tier has a distinct responsibility and can be scaled independently.</p>
+
+  <h3>Gateway</h3>
+  <div class="grid">
+    <div class="card bl-p"><div class="card-port">:8000</div><div class="card-name">api</div><div class="card-desc">FastAPI: JWT auth, SSE publisher, A2A dispatcher. Zero agent logic.</div><div class="card-tags"><span class="tag tp">FastAPI</span><span class="tag tb">JWT</span><span class="tag tt">SSE</span></div></div>
+    <div class="card bl-b"><div class="card-port">:6379</div><div class="card-name">redis</div><div class="card-desc">Pub/sub bridge. SSE clients subscribe to <code>campaign:{id}</code>. Agents publish via the api.</div><div class="card-tags"><span class="tag tb">Redis 7</span></div></div>
+  </div>
+
+  <h3>A2A Agent Microservices</h3>
+  <div class="grid">
+    <div class="card bl-t"><div class="card-port">:8010</div><div class="card-name">character-creator</div><div class="card-desc">Multi-turn character creation. Asks 4-6 questions, generates portrait on completion.</div><div class="card-tags"><span class="tag tt">A2A</span><span class="tag tp">Gemini</span></div></div>
+    <div class="card bl-t"><div class="card-port">:8011</div><div class="card-name">campaign-designer</div><div class="card-desc">Collaborative world planning. Seeds Neo4j graph on completion.</div><div class="card-tags"><span class="tag tt">A2A</span><span class="tag tp">Gemini</span></div></div>
+    <div class="card bl-t"><div class="card-port">:8012</div><div class="card-name">dm-agent</div><div class="card-desc">Core runtime. Fetches context, generates narration, media, and optionally starts NPC conversations.</div><div class="card-tags"><span class="tag tt">A2A</span><span class="tag tp">Gemini</span><span class="tag ta">SSE</span></div></div>
+    <div class="card bl-t"><div class="card-port">:8013</div><div class="card-name">npc-agent</div><div class="card-desc">One turn of a multi-turn NPC conversation. Detects natural goodbye. Generates summary on close.</div><div class="card-tags"><span class="tag tt">A2A</span><span class="tag tp">Gemini</span></div></div>
+    <div class="card bl-t"><div class="card-port">:8014</div><div class="card-name">memory-agent</div><div class="card-desc">STM/LTM memory hub. CutoffDecision + MemoryCompression. Returns consolidated context to callers.</div><div class="card-tags"><span class="tag tt">A2A</span><span class="tag tr">Qdrant</span><span class="tag tb">Postgres</span></div></div>
+  </div>
+
+  <h3>MCP Servers</h3>
+  <div class="grid">
+    <div class="card bl-a"><div class="card-port">:8001</div><div class="card-name">state-mcp</div><div class="card-desc">Postgres CRUD: campaigns, characters, NPCs, turns, memory. 14 tool endpoints.</div><div class="card-tags"><span class="tag tb">PostgreSQL</span><span class="tag ta">MCP HTTP</span></div></div>
+    <div class="card bl-a"><div class="card-port">:8002</div><div class="card-name">memory-mcp</div><div class="card-desc">Qdrant vector ops. Embeds with gemini-embedding-2 (1536-dim). Only called by memory-agent.</div><div class="card-tags"><span class="tag tr">Qdrant</span><span class="tag tp">embedding-2</span></div></div>
+    <div class="card bl-a"><div class="card-port">:8003</div><div class="card-name">knowledge-mcp</div><div class="card-desc">Neo4j world graph. LLM extracts entities from narration. Provides world context to DM.</div><div class="card-tags"><span class="tag tg">Neo4j</span><span class="tag ta">MCP HTTP</span></div></div>
+    <div class="card bl-a"><div class="card-port">:8004</div><div class="card-name">media-mcp</div><div class="card-desc">Delegates to image-service, tts-service, stt-service. Writes to shared media volume.</div><div class="card-tags"><span class="tag ta">MCP HTTP</span><span class="tag tp">Gemini</span><span class="tag tb">OpenAI</span></div></div>
+  </div>
+
+  <h3>Provider Services</h3>
+  <div class="grid">
+    <div class="card bl-g"><div class="card-port">:9001</div><div class="card-name">llm-service</div><div class="card-desc">Gemini text generation adapter. Token counting, Redis caching, usage logging.</div><div class="card-tags"><span class="tag tp">Gemini 2.5 Flash</span><span class="tag tg">swap: Anthropic</span></div></div>
+    <div class="card bl-g"><div class="card-port">:9002</div><div class="card-name">image-service</div><div class="card-desc">Gemini image generation adapter. Prompt-hash caching.</div><div class="card-tags"><span class="tag tp">Gemini Image</span><span class="tag tg">swap: Runware</span></div></div>
+    <div class="card bl-g"><div class="card-port">:9003</div><div class="card-name">tts-service</div><div class="card-desc">OpenAI TTS adapter. SHA-256 caching keyed on text+voice. Fast startup.</div><div class="card-tags"><span class="tag tb">OpenAI TTS</span><span class="tag tg">swap: ElevenLabs</span></div></div>
+    <div class="card bl-g"><div class="card-port">:9004</div><div class="card-name">stt-service</div><div class="card-desc">Whisper STT adapter. Loads model once at startup. Slow healthcheck gate (~10-30s).</div><div class="card-tags"><span class="tag tb">Whisper local</span><span class="tag tg">swap: OpenAI STT</span></div></div>
+  </div>
+
+  <h3>Data Stores</h3>
+  <div class="grid">
+    <div class="card bl-b"><div class="card-port">:5432</div><div class="card-name">postgres</div><div class="card-desc">Primary relational store. users, campaigns (with STM/LTM + NPC conv state), characters, npcs, turns, llm_usage.</div><div class="card-tags"><span class="tag tb">PostgreSQL 16</span></div></div>
+    <div class="card bl-r"><div class="card-port">:6333</div><div class="card-name">qdrant</div><div class="card-desc">Vector store. Collection campaign_turns, 1536-dim cosine, campaign_id payload index.</div><div class="card-tags"><span class="tag tr">Qdrant</span><span class="tag tp">1536-dim</span></div></div>
+    <div class="card bl-g"><div class="card-port">:7687</div><div class="card-name">neo4j</div><div class="card-desc">World knowledge graph. NPC/Location/Faction/Item/Event nodes, 9 relationship types. All nodes carry campaign_id.</div><div class="card-tags"><span class="tag tg">Neo4j 5</span></div></div>
+  </div>
+
+  <h3>Dispatcher Routing Table</h3>
+  <p>The api dispatcher calls <code>get_routing_state()</code> (single Postgres SELECT) then does a pure lookup:</p>
+  <table class="route-table">
+    <thead><tr><th>phase</th><th>active_npc_id</th><th>Routes to</th><th>Port</th></tr></thead>
+    <tbody>
+      <tr><td>character_creation</td><td>null</td><td>character-creator</td><td>8010</td></tr>
+      <tr><td>campaign_design</td><td>null</td><td>campaign-designer</td><td>8011</td></tr>
+      <tr><td>active</td><td>null</td><td>dm-agent</td><td>8012</td></tr>
+      <tr><td>active</td><td>&lt;any uuid&gt;</td><td>npc-agent</td><td>8013</td></tr>
+      <tr><td>completed</td><td>null</td><td>(SSE event only)</td><td>—</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ═══════════════════════════════════════ POSTGRES -->
+<div class="panel" id="panel-postgres">
+  <h2>PostgreSQL Schema</h2>
+  <p>Single database. UUIDs via pgcrypto. No refresh tokens — access token only (httpOnly cookie).</p>
+  <div class="diagram">
+<div class="mermaid">
+erDiagram
+    users {
+        UUID id PK
+        TEXT email UK
+        TEXT password_hash
+        TIMESTAMPTZ created_at
+    }
+    llm_usage {
+        UUID id PK
+        UUID user_id FK
+        TEXT provider
+        TEXT model
+        INT tokens_in
+        INT tokens_out
+        BOOLEAN cached
+        TIMESTAMPTZ created_at
+    }
+    campaigns {
+        UUID id PK
+        UUID user_id FK
+        TEXT title
+        TEXT language
+        campaign_phase phase
+        JSONB plan_json
+        TEXT visual_style
+        UUID active_npc_id FK
+        JSONB active_npc_briefing
+        UUID active_npc_conv_start
+        JSONB short_term_memory
+        TEXT long_term_memory
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+    }
+    characters {
+        UUID id PK
+        UUID campaign_id FK
+        TEXT name
+        TEXT background
+        TEXT class_and_level
+        TEXT_ARR abilities
+        TEXT_ARR equipment
+        TEXT_ARR limitations
+        TEXT power_level
+        TEXT visual_description
+        TEXT portrait_path
+    }
+    npcs {
+        UUID id PK
+        UUID campaign_id FK
+        TEXT name UK
+        TEXT role
+        TEXT visual_description
+        TEXT voice_id
+        TEXT voice_instructions
+        TEXT portrait_path
+    }
+    turns {
+        UUID id PK
+        UUID campaign_id FK
+        turn_role role
+        TEXT content
+        TEXT npc_name
+        TEXT audio_path
+        TEXT image_path
+        JSONB metadata
+        TIMESTAMPTZ created_at
+    }
+    users ||--o{ llm_usage : has
+    users ||--o{ campaigns : owns
+    campaigns ||--o| characters : "has one"
+    campaigns ||--o{ npcs : "has many"
+    campaigns ||--o{ turns : "has many"
+    campaigns }o--o| npcs : active_npc_id
+</div>
+  </div>
+
+  <h3>campaigns — NPC conversation columns</h3>
+  <div class="db-grid">
+    <div class="dbt">
+      <div class="dbt-head" style="background:#1a1f3d">NPC conv state (3 cols added to campaigns)</div>
+      <table>
+        <thead><tr><th>Column</th><th>Type</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td class="cfk">active_npc_id</td><td class="ct">UUID</td><td>FK → npcs; null when no conv active</td></tr>
+          <tr><td>active_npc_briefing</td><td class="ct">JSONB</td><td>DM-generated: goals, knows, mood, reveal_if</td></tr>
+          <tr><td>active_npc_conv_start</td><td class="ct">UUID</td><td>turn_id marking conv start — used for history slicing</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="dbt">
+      <div class="dbt-head" style="background:#1a2a1a">Memory columns (on campaigns)</div>
+      <table>
+        <thead><tr><th>Column</th><th>Type</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td>short_term_memory</td><td class="ct">JSONB</td><td>list[str] of recent memory_note strings</td></tr>
+          <tr><td>long_term_memory</td><td class="ct">TEXT</td><td>compressed markdown history (LTM)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <h3>turns — role enum and filtering</h3>
+  <div class="db-grid">
+    <div class="dbt">
+      <div class="dbt-head" style="background:#2a1a1a">turn_role enum</div>
+      <table>
+        <thead><tr><th>Value</th><th>Who logs it</th><th>Visible to DM?</th></tr></thead>
+        <tbody>
+          <tr><td>player</td><td>api (on audio upload)</td><td>Yes</td></tr>
+          <tr><td>dm</td><td>dm-agent</td><td>Yes</td></tr>
+          <tr><td>npc</td><td>npc-agent, dm-agent (opening line)</td><td>No — excluded via <code>exclude_roles=["npc"]</code></td></tr>
+          <tr><td>system</td><td>npc-agent (conv summary), api (phase)</td><td>Yes — summaries appear naturally in DM context</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="dbt">
+      <div class="dbt-head" style="background:#2a2a1a">get_turns filtering params</div>
+      <table>
+        <thead><tr><th>Param</th><th>Used by</th></tr></thead>
+        <tbody>
+          <tr><td><code>exclude_roles=["npc"]</code></td><td>dm-agent — keeps NPC chatter out of DM context</td></tr>
+          <tr><td><code>since_turn_id=conv_start</code></td><td>npc-agent — slices to current conversation</td></tr>
+          <tr><td><code>before_turn_id=conv_start, limit=3</code></td><td>npc-agent — fetches 3-turn preamble</td></tr>
+          <tr><td><code>limit=10</code></td><td>dm-agent standard context window</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ QDRANT -->
+<div class="panel" id="panel-qdrant">
+  <h2>Qdrant — Semantic Memory</h2>
+  <p>Stores every turn as a 1536-dim embedding. memory-agent is the only caller — no agent touches Qdrant directly.</p>
+  <div class="diagram">
+<div class="mermaid">
+flowchart LR
+    MA["memory-agent"]
+    MM["memory-mcp :8002\nembedder.py"]
+    G["Gemini API\ngemini-embedding-2"]
+    Q["Qdrant :6333\ncampaign_turns\n1536-dim cosine"]
+
+    MA -- "store(turn_id, text, role)" --> MM
+    MA -- "recall(query, top_k=8)" --> MM
+    MM -- "embed_content(model=gemini-embedding-2\noutput_dimensionality=1536)" --> G
+    G -- "vector[1536]" --> MM
+    MM -- "upsert point" --> Q
+    MM -- "filtered search\ncampaign_id=..." --> Q
+    Q -- "top-k snippets" --> MM
+    MM -- "formatted context" --> MA
+</div>
+  </div>
+
+  <div class="db-grid">
+    <div class="dbt">
+      <div class="dbt-head" style="background:#1a0a2a">Collection: campaign_turns</div>
+      <table>
+        <thead><tr><th>Setting</th><th>Value</th></tr></thead>
+        <tbody>
+          <tr><td>Vector size</td><td class="ct">1536</td></tr>
+          <tr><td>Distance</td><td class="ct">Cosine</td></tr>
+          <tr><td>On-disk payload</td><td class="ct">true</td></tr>
+          <tr><td>Embedding model</td><td class="ct">gemini-embedding-2</td></tr>
+          <tr><td>Normalization</td><td class="ct">auto (L2)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="dbt">
+      <div class="dbt-head" style="background:#1a0a2a">Point payload schema</div>
+      <table>
+        <thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td class="cpk">id</td><td class="ct">UUID</td><td>matches turns.id</td></tr>
+          <tr><td>campaign_id</td><td class="ct">keyword</td><td>payload index — always filtered first</td></tr>
+          <tr><td>role</td><td class="ct">keyword</td><td>player/dm/npc/system</td></tr>
+          <tr><td>npc_name</td><td class="ct">text</td><td>nullable</td></tr>
+          <tr><td>text_snippet</td><td class="ct">text</td><td>first 512 chars</td></tr>
+          <tr><td>created_at</td><td class="ct">datetime</td><td>ISO-8601</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ NEO4J -->
+<div class="panel" id="panel-neo4j">
+  <h2>Neo4j — World Knowledge Graph</h2>
+  <p>Living world model. Seeded by campaign-designer. Updated after every DM narration. All queries filter by campaign_id.</p>
+  <div class="diagram">
+<div class="mermaid">
+graph LR
+    LOC["Location\nname, type, description"]
+    NPC["NPC\nname, role, faction, status"]
+    FAC["Faction\nname, alignment"]
+    ITM["Item\nname, magical"]
+    EVT["Event\nname, turn_id"]
+
+    NPC -- "LIVES_IN\nsince, status" --> LOC
+    NPC -- "MEMBER_OF\nrank" --> FAC
+    FAC -- "ALLIED_WITH\nstrength" --> FAC
+    FAC -- "HOSTILE_TO\nsince" --> FAC
+    FAC -- "CONTROLS" --> LOC
+    EVT -- "VISITED" --> LOC
+    EVT -- "INVOLVES\nrole" --> NPC
+    NPC -- "OWNS" --> ITM
+    ITM -- "LOCATED_IN" --> LOC
+</div>
+  </div>
+  <div class="db-grid">
+    <div class="dbt">
+      <div class="dbt-head" style="background:#0a2a0a">knowledge-mcp tools</div>
+      <table>
+        <thead><tr><th>Tool</th><th>Input</th><th>What happens</th></tr></thead>
+        <tbody>
+          <tr><td>update_world</td><td>narrative_text</td><td>LLM extracts entities → Cypher MERGE</td></tr>
+          <tr><td>get_world_context</td><td>focus_text, depth?</td><td>Full-text search → N-hop traversal → markdown</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="dbt">
+      <div class="dbt-head" style="background:#0a2a0a">Indexes</div>
+      <table>
+        <thead><tr><th>Index</th><th>On</th></tr></thead>
+        <tbody>
+          <tr><td>npc_campaign</td><td>NPC (campaign_id, name)</td></tr>
+          <tr><td>location_campaign</td><td>Location (campaign_id, name)</td></tr>
+          <tr><td>faction_campaign</td><td>Faction (campaign_id, name)</td></tr>
+          <tr><td>entity_search</td><td>Fulltext: NPC|Location|Faction|Item name+description</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ MCP TOOLS -->
+<div class="panel" id="panel-mcp">
+  <h2>MCP Tool Catalogue</h2>
+  <p>All tools: <code>POST /tools/{name}</code> with <code>X-Campaign-ID</code> header. Middleware stores it in <code>request.state.campaign_id</code>.</p>
+
+  <h3>state-mcp :8001</h3>
+  <div class="tool-grid">
+    <div class="tool"><div class="tool-name">create_campaign</div><div class="tool-io"><b>in:</b> title?, language<br><b>out:</b> campaign_id</div></div>
+    <div class="tool"><div class="tool-name">save_campaign_plan</div><div class="tool-io"><b>in:</b> plan_json<br><b>out:</b> ok</div></div>
+    <div class="tool"><div class="tool-name">save_character</div><div class="tool-io"><b>in:</b> character_json, portrait_path?<br><b>out:</b> character_id</div></div>
+    <div class="tool"><div class="tool-name">set_phase</div><div class="tool-io"><b>in:</b> phase (enum)<br><b>out:</b> ok</div></div>
+    <div class="tool"><div class="tool-name">get_routing_state</div><div class="tool-io"><b>in:</b> (none)<br><b>out:</b> phase, active_npc_id<br>Single SELECT — dispatcher only</div></div>
+    <div class="tool"><div class="tool-name">get_campaign_context</div><div class="tool-io"><b>in:</b> (none)<br><b>out:</b> campaign, character|null<br>Single JOIN query</div></div>
+    <div class="tool"><div class="tool-name">set_active_npc</div><div class="tool-io"><b>in:</b> npc_id, briefing, conv_start_turn_id<br><b>out:</b> ok<br>Atomic UPDATE of all 3 NPC conv cols</div></div>
+    <div class="tool"><div class="tool-name">get_active_npc_state</div><div class="tool-io"><b>in:</b> (none)<br><b>out:</b> npc_id, briefing, conv_start_turn_id (or npc_id:null)<br>npc-agent calls this each turn</div></div>
+    <div class="tool"><div class="tool-name">clear_active_npc</div><div class="tool-io"><b>in:</b> (none)<br><b>out:</b> ok<br>NULLs all 3 NPC conv cols atomically</div></div>
+    <div class="tool"><div class="tool-name">save_npc / get_npc / list_npcs</div><div class="tool-io"><b>save:</b> npc_json, portrait_path? → npc_id (upsert)<br><b>get:</b> npc_id? or name? → npc<br><b>list:</b> → npcs[]</div></div>
+    <div class="tool"><div class="tool-name">log_turn</div><div class="tool-io"><b>in:</b> role, content, npc_name?, metadata?<br><b>out:</b> turn_id</div></div>
+    <div class="tool"><div class="tool-name">get_turns</div><div class="tool-io"><b>in:</b> limit?, exclude_roles?, since_turn_id?, before_turn_id?, npc_name?<br><b>out:</b> turns[] (ascending)</div></div>
+    <div class="tool" style="border-color:var(--purple)"><div class="tool-name" style="color:#b09cff">get_memory</div><div class="tool-io"><b>in:</b> (none)<br><b>out:</b> short_term: list[str], long_term: str<br>memory-agent only</div></div>
+    <div class="tool" style="border-color:var(--purple)"><div class="tool-name" style="color:#b09cff">update_memory</div><div class="tool-io"><b>in:</b> short_term, long_term<br><b>out:</b> ok<br>Atomic overwrite of both fields</div></div>
+  </div>
+
+  <h3>memory-mcp :8002</h3>
+  <div class="tool-grid">
+    <div class="tool"><div class="tool-name">store</div><div class="tool-io"><b>in:</b> turn_id, text, role<br><b>out:</b> ok<br>Embeds via gemini-embedding-2, upserts to Qdrant</div></div>
+    <div class="tool"><div class="tool-name">recall</div><div class="tool-io"><b>in:</b> query, top_k? (default 8)<br><b>out:</b> context (formatted markdown)<br>Always filtered by campaign_id</div></div>
+  </div>
+
+  <h3>knowledge-mcp :8003</h3>
+  <div class="tool-grid">
+    <div class="tool"><div class="tool-name">update_world</div><div class="tool-io"><b>in:</b> narrative_text<br><b>out:</b> entities_added, relationships_added</div></div>
+    <div class="tool"><div class="tool-name">get_world_context</div><div class="tool-io"><b>in:</b> focus_text?, depth?<br><b>out:</b> context (markdown nodes + edges)</div></div>
+  </div>
+
+  <h3>media-mcp :8004</h3>
+  <div class="tool-grid">
+    <div class="tool"><div class="tool-name">generate_image</div><div class="tool-io"><b>in:</b> prompt, style, type (scene|portrait)<br><b>out:</b> file_path<br>→ image-service :9002</div></div>
+    <div class="tool"><div class="tool-name">speak</div><div class="tool-io"><b>in:</b> text, voice_id, voice_instructions<br><b>out:</b> file_path<br>→ tts-service :9003</div></div>
+    <div class="tool"><div class="tool-name">transcribe</div><div class="tool-io"><b>in:</b> file_path<br><b>out:</b> text<br>→ stt-service :9004</div></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ AGENTS -->
+<div class="panel" id="panel-agents">
+  <h2>Agent Specifications</h2>
+  <p>All agents: <code>GET /.well-known/agent.json</code> (AgentCard) + <code>POST /</code> (JSON-RPC 2.0 tasks/send). Campaign context injected directly into LLM prompt — no Redis session state.</p>
+
+  <h3>memory-agent :8014 — Memory Hub</h3>
+  <div class="diagram">
+<div class="mermaid">
+sequenceDiagram
+    participant C as Caller (dm/npc-agent)
+    participant MA as memory-agent
+    participant SM as state-mcp
+    participant MM as memory-mcp
+    participant LLM as llm-service
+
+    C ->> MA: A2A tasks/send (query, new_event)
+    MA ->> SM: get_memory()
+    SM -->> MA: short_term[], long_term
+    opt new_event not empty
+        MA ->> MM: store(turn_id, new_event, dm)
+    end
+    MA ->> MM: recall(query, top_k=8)
+    MM -->> MA: semantic hits
+    MA ->> MA: append new_event to short_term
+    alt len(short_term) >= 5
+        MA ->> LLM: CutoffDecision prompt
+        LLM -->> MA: should_compress bool
+        alt should_compress
+            MA ->> LLM: MemoryCompression prompt
+            LLM -->> MA: compressed_long_term, session_summary
+            MA ->> MA: long_term = compressed; short_term = last 3
+        end
+    end
+    MA ->> SM: update_memory(short_term, long_term)
+    MA -->> C: recalled_context, long_term_summary, recent_events
+</div>
+  </div>
+
+  <h3>dm-agent :8012 — Core DM Runtime</h3>
+  <div class="steps">
+    <div class="step"><div class="stepn">1</div><div class="stepb"><div class="stept">Gather context (parallel)</div><div class="stepd"><code>get_campaign_context()</code>, <code>get_turns(limit=10, exclude_roles=["npc"])</code>, <code>get_world_context(focus_text)</code>, A2A → memory-agent</div></div></div>
+    <div class="step"><div class="stepn">2</div><div class="stepb"><div class="stept">Log player turn</div><div class="stepd"><code>log_turn(role="player", content=player_message)</code></div></div></div>
+    <div class="step"><div class="stepn">3</div><div class="stepb"><div class="stept">Generate DMResponse (LLM)</div><div class="stepd">Structured JSON: <code>gm_speech</code>, <code>scene_description</code>, <code>memory_note</code>, <code>invoke_npc?</code> (with briefing + opening_line)</div></div></div>
+    <div class="step"><div class="stepn">4</div><div class="stepb"><div class="stept">Publish narration SSE + generate media (parallel)</div><div class="stepd"><code>speak(gm_speech)</code> + <code>generate_image(scene_description)</code> concurrently. Publish <code>dm_text</code>, <code>audio_ready</code>, <code>scene_ready</code>.</div></div></div>
+    <div class="step"><div class="stepn">5</div><div class="stepb"><div class="stept">Store DM turn + update memory + update world (fire-and-forget)</div><div class="stepd"><code>log_turn(dm)</code> · A2A → memory-agent(new_event=memory_note) · <code>update_world(gm_speech)</code></div></div></div>
+    <div class="step"><div class="stepn">6</div><div class="stepb"><div class="stept">If invoke_npc set — start NPC conversation</div><div class="stepd"><code>save_npc()</code> + <code>generate_image(portrait)</code> parallel → <code>speak(opening_line)</code> → <code>log_turn(npc, opening_line)</code> → <code>set_active_npc(npc_id, briefing, conv_start_turn_id)</code> → publish <code>npc_introduced</code>, <code>npc_speech</code>, <code>audio_ready</code></div></div></div>
+  </div>
+
+  <h3>character-creator :8010</h3>
+  <div class="steps">
+    <div class="step"><div class="stepn">1</div><div class="stepb"><div class="stept">Load prior turns + campaign context</div><div class="stepd"><code>get_turns(limit=20)</code> + <code>get_campaign_context()</code></div></div></div>
+    <div class="step"><div class="stepn">2</div><div class="stepb"><div class="stept">Next question or finalise</div><div class="stepd">Gemini multi-turn: asks 4-6 questions covering background, class, abilities, equipment, limitations, appearance. Ends with [DONE].</div></div></div>
+    <div class="step"><div class="stepn">3</div><div class="stepb"><div class="stept">On DONE: generate portrait + save + advance phase</div><div class="stepd"><code>generate_image(visual_description, "portrait")</code> → <code>save_character()</code> → <code>set_phase("campaign_design")</code></div></div></div>
+  </div>
+
+  <h3>campaign-designer :8011</h3>
+  <div class="steps">
+    <div class="step"><div class="stepn">1</div><div class="stepb"><div class="stept">Conversation loop</div><div class="stepd">3-5 questions: genre, tone, hook, major NPCs, visual style. Ends with [DONE].</div></div></div>
+    <div class="step"><div class="stepn">2</div><div class="stepb"><div class="stept">On DONE: persist + seed world + advance phase</div><div class="stepd"><code>save_campaign_plan()</code> → <code>update_world(plan_summary)</code> (seeds Neo4j) → <code>set_phase("active")</code></div></div></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ NPC CONVERSATIONS -->
+<div class="panel" id="panel-npc">
+  <h2>NPC Multi-Turn Conversations</h2>
+  <p>NPC conversations are genuine multi-turn dialogues — the player and NPC go back and forth until one of them says goodbye. The DM initiates and closes; the api dispatcher handles all in-between turns.</p>
+
+  <h3>Conversation Lifecycle</h3>
+  <div class="diagram">
+<div class="mermaid">
+sequenceDiagram
+    participant P as Player
+    participant A as api dispatcher
+    participant DM as dm-agent
+    participant NPC as npc-agent
+    participant SM as state-mcp
+
+    P ->> A: "I approach the innkeeper"
+    A ->> SM: get_routing_state()
+    SM -->> A: phase=active, active_npc_id=null
+    A ->> DM: A2A tasks/send
+
+    DM ->> DM: generate DMResponse with invoke_npc
+    Note over DM: invoke_npc = {name, briefing, opening_line}
+    DM ->> SM: save_npc() -> npc_id
+    DM ->> SM: log_turn(npc, opening_line) -> conv_start_turn_id
+    DM ->> SM: set_active_npc(npc_id, briefing, conv_start_turn_id)
+    DM -->> A: narration + opening_line + portrait
+
+    loop Multi-turn NPC conversation
+        P ->> A: player message
+        A ->> SM: get_routing_state()
+        SM -->> A: active_npc_id = npc_id
+        A ->> NPC: A2A tasks/send
+
+        NPC ->> SM: get_active_npc_state() -> briefing, conv_start
+        NPC ->> SM: get_npc(npc_id)
+        NPC ->> SM: get_turns(before=conv_start, limit=3) -- preamble
+        NPC ->> SM: get_turns(since=conv_start) -- conv history
+        NPC ->> NPC: generate response, detect done
+        NPC ->> SM: log_turn(npc, response)
+        NPC -->> A: npc_speech, done=false
+        A -->> P: SSE npc_speech + audio
+    end
+
+    Note over NPC: Player or NPC says goodbye
+    NPC ->> NPC: done=true, generate summary
+    NPC ->> SM: log_turn(system, summary, type=npc_conv_summary)
+    NPC ->> SM: clear_active_npc()
+    NPC -->> A: done=true, summary
+
+    P ->> A: next player message
+    A ->> SM: get_routing_state()
+    SM -->> A: active_npc_id=null
+    A ->> DM: A2A tasks/send
+    Note over DM: get_turns includes system summary turn -- DM sees what was learned
+</div>
+  </div>
+
+  <h3>NPC Context Layers</h3>
+  <p>Each npc-agent turn rebuilds context from three distinct layers with clear role labels:</p>
+  <div class="grid-wide">
+    <div class="card bl-b">
+      <div class="card-name">Layer 1 — Preamble (3 turns before conv_start)</div>
+      <div class="card-desc">Gives the NPC continuity: why did the player approach? What did the DM just narrate?<br><br>
+      <code>[DM]     "You push open the tavern door..."</code><br>
+      <code>[Player] "I approach the innkeeper."</code><br>
+      <code>[DM]     "She sets down her cloth and turns."</code>
+      </div>
+    </div>
+    <div class="card bl-p">
+      <div class="card-name">Layer 2 — DM Briefing (dynamic, per-conversation)</div>
+      <div class="card-desc">Generated by the DM when starting the NPC conv. Tells the NPC what to do, not who to be (that's the static profile).<br><br>
+      <code>goals: Protect regulars, be wary of strangers</code><br>
+      <code>knows: Merchants left 3 nights ago toward Loppio</code><br>
+      <code>mood: Tired, suspicious</code><br>
+      <code>reveal_if: Player seems trustworthy or offers coin</code>
+      </div>
+    </div>
+    <div class="card bl-t">
+      <div class="card-name">Layer 3 — Conversation so far (since conv_start)</div>
+      <div class="card-desc">All turns since conv_start_turn_id — player and NPC interleaved with clear labels.<br><br>
+      <code>[You]    "Evening. What'll it be?"</code><br>
+      <code>[Player] "I'm looking for missing merchants."</code><br>
+      <code>[You]    "Aye, they left three nights past..."</code><br>
+      <code>[Player] "Do you know where they went?"</code>
+      </div>
+    </div>
+  </div>
+
+  <h3>Conversation Close Detection</h3>
+  <div class="card bl-g" style="max-width:600px">
+    <div class="card-name">How done=true works</div>
+    <div class="card-desc" style="margin-top:6px">
+      The LLM sees the full conversation and the latest player message. The system prompt instructs: set <code>done=true</code> ONLY when both sides have reached a natural close — farewell words, resolved topic, or the player explicitly ending it. Examples: "Thanks, safe travels", "Goodbye", "That's all I needed", "Pleasure doing business". The model is explicitly told never to end mid-conversation. If the player sends an abrupt close ("ok bye"), the NPC responds naturally in character ("Fare well, traveller") and then returns <code>done=true</code>.
+    </div>
+  </div>
+
+  <h3>After the conversation — DM context</h3>
+  <p>The NPC conv summary is logged as a <code>role=system</code> turn with <code>metadata.type="npc_conv_summary"</code>. The DM's next <code>get_turns(exclude_roles=["npc"])</code> call returns this summary turn naturally — no special injection needed. The DM sees something like:</p>
+  <div class="card bl-a" style="max-width:600px;font-family:monospace;font-size:11px;color:var(--text)">
+    [system] The player learned from Elara the innkeeper that the missing merchants departed three nights ago heading east toward Loppio. She seemed relieved when they left.
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ TURN FLOWS -->
+<div class="panel" id="panel-flows">
+  <h2>Turn Flows</h2>
+
+  <h3>Voice Input → DM Response (full path)</h3>
+  <div class="diagram">
+<div class="mermaid">
+sequenceDiagram
+    participant B as Browser
+    participant A as api
+    participant DM as dm-agent
+    participant MA as memory-agent
+    participant SM as state-mcp
+    participant MM as memory-mcp
+    participant KM as knowledge-mcp
+    participant MD as media-mcp
+    participant L as llm-service
+    participant R as Redis
+
+    B ->> A: POST /audio (WAV blob)
+    A ->> MD: transcribe(file_path)
+    MD -->> A: text
+    A ->> SM: log_turn(player, text)
+    A ->> SM: get_routing_state()
+    SM -->> A: phase=active, active_npc_id=null
+    A ->> DM: A2A tasks/send
+
+    par Gather context
+        DM ->> SM: get_campaign_context()
+        DM ->> SM: get_turns(limit=10, exclude_roles=[npc])
+        DM ->> KM: get_world_context(focus_text)
+        DM ->> MA: A2A (query, new_event="")
+        MA ->> SM: get_memory()
+        MA ->> MM: recall(query)
+        MA -->> DM: recalled_context, long_term_summary, recent_events
+    end
+
+    DM ->> L: POST /generate (full prompt)
+    L -->> DM: DMResponse JSON
+
+    DM ->> R: PUBLISH dm_text
+
+    par Media generation
+        DM ->> MD: speak(gm_speech)
+        DM ->> MD: generate_image(scene_description)
+    end
+
+    DM ->> SM: log_turn(dm, gm_speech)
+
+    par Fire and forget
+        DM ->> MA: A2A (query, new_event=memory_note)
+        DM ->> KM: update_world(gm_speech)
+    end
+
+    DM ->> R: PUBLISH audio_ready, scene_ready
+    DM -->> A: result
+    R -->> B: SSE events
+</div>
+  </div>
+
+  <h3>Memory Compression Flow (inside memory-agent)</h3>
+  <div class="diagram">
+<div class="mermaid">
+flowchart TD
+    A["Receive: query + new_event"] --> B["get_memory from state-mcp\nshort_term list + long_term markdown"]
+    B --> C{"new_event\nnot empty?"}
+    C -- yes --> D["store new_event in Qdrant\nvia memory-mcp"]
+    C -- no --> E
+    D --> E["recall top-8 semantic hits\nfor query"]
+    E --> F["Append new_event to short_term"]
+    F --> G{"len(short_term)\n>= 5?"}
+    G -- no --> H["update_memory in Postgres"]
+    G -- yes --> I["CutoffDecision LLM call\nCheck for narrative break"]
+    I --> J{"should_compress?"}
+    J -- no --> H
+    J -- yes --> K["MemoryCompression LLM call\nMerge STM into LTM markdown"]
+    K --> L["short_term = last 3 events\nlong_term = compressed"]
+    L --> H
+    H --> Z["Return: recalled_context\nlong_term_summary, recent_events"]
+</div>
+  </div>
+</div>
+
+</main>
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'dark',
+  themeVariables: {
+    background: '#1a1d27',
+    primaryColor: '#2e3250',
+    primaryTextColor: '#e2e8f0',
+    primaryBorderColor: '#7c6af7',
+    lineColor: '#4ecdc4',
+    secondaryColor: '#22263a',
+    tertiaryColor: '#1a1d27',
+    edgeLabelBackground: '#1a1d27',
+    clusterBkg: '#1a1d27',
+    clusterBorder: '#2e3250',
+    actorBkg: '#1a1d27',
+    actorBorder: '#7c6af7',
+    actorTextColor: '#e2e8f0',
+    actorLineColor: '#4ecdc4',
+    signalColor: '#4ecdc4',
+    signalTextColor: '#e2e8f0',
+    noteBkgColor: '#22263a',
+    noteTextColor: '#e2e8f0',
+    noteBorderColor: '#2e3250'
+  }
+});
+function show(name, el) {
+  document.querySelectorAll('.panel').forEach(function(p){ p.classList.remove('active'); });
+  document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
+  document.getElementById('panel-' + name).classList.add('active');
+  el.classList.add('active');
+  mermaid.run({ querySelector: '#panel-' + name + ' .mermaid' });
+}
+</script>
+</body>
+</html>
