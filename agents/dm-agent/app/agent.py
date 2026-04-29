@@ -40,6 +40,12 @@ Respond with JSON matching this schema exactly:
   }}
 }}
 
+PACING RULES — follow strictly:
+- Set invoke_npc to null for the vast majority of turns. Most turns are exploration: describe the environment, present choices, reveal details, react to player actions.
+- Only set invoke_npc when the player explicitly addresses or approaches a specific named or visible person in the scene. Never invent a surprise NPC encounter unprompted.
+- Do not invoke an NPC two turns in a row. After a conversation ends, give at least one or two pure exploration turns before allowing another NPC.
+- Good DM turns without NPCs: vivid scene descriptions, consequences of player actions, ambient world details, forks in the road, sounds/smells/atmosphere, discovered objects or clues.
+
 Campaign: {campaign_json}
 Character: {character_json}
 Long-term memory: {long_term_summary}

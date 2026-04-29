@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useGameStore } from '../../store'
 import { api } from '../../api'
 import { SceneImage } from './SceneImage'
@@ -12,13 +12,19 @@ interface Props { campaignId: string }
 
 export function GameView({ campaignId }: Props) {
   const store = useGameStore()
+  const [audioPlaying, setAudioPlaying] = useState(false)
 
-  // Auto-play audio when it changes
+  // Drain the audio queue — play one clip at a time
   useEffect(() => {
-    if (!store.currentAudio) return
-    const audio = new Audio(api.mediaUrl(store.currentAudio))
-    audio.play().catch(() => {})
-  }, [store.currentAudio])
+    if (audioPlaying || store.audioQueue.length === 0) return
+    const path = store.shiftAudio()
+    if (!path) return
+    setAudioPlaying(true)
+    const audio = new Audio(api.mediaUrl(path))
+    audio.onended = () => setAudioPlaying(false)
+    audio.onerror = () => setAudioPlaying(false)
+    audio.play().catch(() => setAudioPlaying(false))
+  }, [audioPlaying, store.audioQueue.length])
 
   return (
     <div style={{ display: 'flex', height: '100vh', flexDirection: 'column' }}>

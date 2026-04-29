@@ -34,7 +34,7 @@ export function useSSE(campaignId: string) {
           store.setAgentRunning(false)
           break
         case 'audio_ready':
-          store.setCurrentAudio(payload.file_path)
+          store.enqueueAudio(payload.file_path)
           break
         case 'scene_ready':
           store.setCurrentImage(payload.file_path)

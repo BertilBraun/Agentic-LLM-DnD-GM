@@ -15,7 +15,7 @@ export interface NPC {
 interface GameState {
   messages: Message[]
   currentImage: string | null
-  currentAudio: string | null
+  audioQueue: string[]
   activeNPC: NPC | null
   phase: string
   isAgentRunning: boolean
@@ -23,7 +23,8 @@ interface GameState {
 
   appendMessage: (msg: Omit<Message, 'id'>) => void
   setCurrentImage: (path: string) => void
-  setCurrentAudio: (path: string) => void
+  enqueueAudio: (path: string) => void
+  shiftAudio: () => string | undefined
   setActiveNPC: (npc: NPC) => void
   clearActiveNPC: () => void
   setPhase: (phase: string) => void
@@ -32,10 +33,10 @@ interface GameState {
   reset: () => void
 }
 
-export const useGameStore = create<GameState>((set) => ({
+export const useGameStore = create<GameState>((set, get) => ({
   messages: [],
   currentImage: null,
-  currentAudio: null,
+  audioQueue: [],
   activeNPC: null,
   phase: 'character_creation',
   isAgentRunning: false,
@@ -46,7 +47,12 @@ export const useGameStore = create<GameState>((set) => ({
       messages: [...s.messages, { ...msg, id: crypto.randomUUID() }],
     })),
   setCurrentImage: (path) => set({ currentImage: path }),
-  setCurrentAudio: (path) => set({ currentAudio: path }),
+  enqueueAudio: (path) => set((s) => ({ audioQueue: [...s.audioQueue, path] })),
+  shiftAudio: () => {
+    const [next, ...rest] = get().audioQueue
+    set({ audioQueue: rest })
+    return next
+  },
   setActiveNPC: (npc) => set({ activeNPC: npc }),
   clearActiveNPC: () => set({ activeNPC: null }),
   setPhase: (phase) => set({ phase }),
@@ -56,7 +62,7 @@ export const useGameStore = create<GameState>((set) => ({
     set({
       messages: [],
       currentImage: null,
-      currentAudio: null,
+      audioQueue: [],
       activeNPC: null,
       phase: 'character_creation',
       isAgentRunning: false,
