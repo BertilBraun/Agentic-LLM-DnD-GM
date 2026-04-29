@@ -1,9 +1,0 @@
-openai
-openai-whisper
-sounddevice
-soundfile
-
-# TTS
-PyQt6
-
-googletrans
