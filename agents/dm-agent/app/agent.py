@@ -134,12 +134,8 @@ async def run(campaign_id: str, player_message: str) -> str:
     recalled_context = mem.recalled_context
     recent_events = mem.recent_events
 
-    # 2. Log player turn (system-tagged messages are logged as system, not player)
-    is_system_trigger = player_message.startswith('[SYSTEM]')
-    log_role = 'system' if is_system_trigger else 'player'
-    await call_mcp(STATE_MCP_URL, 'log_turn', {'role': log_role, 'content': player_message}, campaign_id, LogTurnOut)
-
-    # 3. LLM call
+    # 2. LLM call — player turn is logged only after this succeeds, so a retry
+    #    of a failed turn is safe (no duplicate player turns in history).
     recent_turns_text = '\n'.join(f'[{t.role.upper()}] {t.content}' for t in turns)
     system = DM_SYSTEM.format(
         campaign_json=json.dumps(campaign.model_dump(), indent=2),
@@ -158,70 +154,79 @@ async def run(campaign_id: str, player_message: str) -> str:
 
     visual_style: str = campaign.visual_style or 'fantasy digital art, detailed'
 
-    # 4. Log DM turn
-    await call_mcp(STATE_MCP_URL, 'log_turn', {'role': 'dm', 'content': dm.gm_speech}, campaign_id, LogTurnOut)
+    # 3. Log player turn then DM turn (system-tagged messages logged as system)
+    is_system_trigger = player_message.startswith('[SYSTEM]')
+    log_role = 'system' if is_system_trigger else 'player'
+    await call_mcp(STATE_MCP_URL, 'log_turn', {'role': log_role, 'content': player_message}, campaign_id, LogTurnOut)
+    # Store the full DmResponse as intent so background tasks can be reconstructed
+    # if the process crashes before they complete.
+    await call_mcp(
+        STATE_MCP_URL,
+        'log_turn',
+        {'role': 'dm', 'content': dm.gm_speech, 'metadata': {'intent': dm.model_dump()}},
+        campaign_id,
+        LogTurnOut,
+    )
 
-    # 5. Publish dm_text — frontend unlocks input immediately
+    # 4. Publish dm_text — frontend unlocks input immediately
     await publish_event(campaign_id, {'type': 'dm_text', 'content': dm.gm_speech})
 
-    # 6. TTS + image + memory + world as background (user can type again now)
-    async def _background() -> None:
-        async def _speak() -> None:
-            try:
-                r = await call_mcp(
-                    MEDIA_MCP_URL,
-                    'speak',
-                    {'text': dm.gm_speech, 'voice_id': DM_VOICE_ID, 'voice_instructions': DM_VOICE_INSTRUCTIONS},
-                    campaign_id,
-                    SpeakOut,
-                    timeout=90,
-                )
-                if r.stream_path:
-                    await publish_event(campaign_id, {'type': 'audio_ready', 'stream_path': r.stream_path})
-            except Exception:
-                logger.warning('DM TTS failed (non-critical)', exc_info=True)
+    # 5. TTS + image + memory + world — awaited so the Redis lock is held until
+    #    all side effects complete and errors propagate rather than being dropped.
+    async def _speak() -> None:
+        try:
+            r = await call_mcp(
+                MEDIA_MCP_URL,
+                'speak',
+                {'text': dm.gm_speech, 'voice_id': DM_VOICE_ID, 'voice_instructions': DM_VOICE_INSTRUCTIONS},
+                campaign_id,
+                SpeakOut,
+                timeout=90,
+            )
+            if r.stream_path:
+                await publish_event(campaign_id, {'type': 'audio_ready', 'stream_path': r.stream_path})
+        except Exception:
+            logger.warning('DM TTS failed (non-critical)', exc_info=True)
 
-        async def _image() -> None:
-            try:
-                r = await call_mcp(
-                    MEDIA_MCP_URL,
-                    'generate_image',
-                    {'prompt': dm.scene_description, 'style': visual_style, 'type': 'scene'},
-                    campaign_id,
-                    ImageOut,
-                    timeout=120,
-                )
-                if r.file_path:
-                    # Persist so page reloads show the latest scene image
-                    await call_mcp(
-                        STATE_MCP_URL,
-                        'log_turn',
-                        {'role': 'system', 'content': '', 'image_path': r.file_path},
-                        campaign_id,
-                        LogTurnOut,
-                    )
-                    await publish_event(campaign_id, {'type': 'scene_ready', 'file_path': r.file_path})
-            except Exception:
-                logger.warning('Scene image generation failed (non-critical)', exc_info=True)
-
-        async def _memory_and_world() -> None:
-            try:
-                await _call_memory_agent(campaign_id, player_message, dm.memory_note)
-            except Exception:
-                logger.warning('Memory agent update failed (non-critical)', exc_info=True)
-            try:
+    async def _image() -> None:
+        try:
+            r = await call_mcp(
+                MEDIA_MCP_URL,
+                'generate_image',
+                {'prompt': dm.scene_description, 'style': visual_style, 'type': 'scene'},
+                campaign_id,
+                ImageOut,
+                timeout=120,
+            )
+            if r.file_path:
+                # Persist so page reloads show the latest scene image
                 await call_mcp(
-                    KNOWLEDGE_MCP_URL, 'update_world', {'narrative_text': dm.gm_speech}, campaign_id, UpdateWorldOut
+                    STATE_MCP_URL,
+                    'log_turn',
+                    {'role': 'system', 'content': '', 'image_path': r.file_path},
+                    campaign_id,
+                    LogTurnOut,
                 )
-            except Exception:
-                logger.warning('World update after DM turn failed (non-critical)', exc_info=True)
+                await publish_event(campaign_id, {'type': 'scene_ready', 'file_path': r.file_path})
+        except Exception:
+            logger.warning('Scene image generation failed (non-critical)', exc_info=True)
 
-        await asyncio.gather(_speak(), _image(), _memory_and_world())
+    async def _memory_and_world() -> None:
+        try:
+            await _call_memory_agent(campaign_id, player_message, dm.memory_note)
+        except Exception:
+            logger.warning('Memory agent update failed (non-critical)', exc_info=True)
+        try:
+            await call_mcp(
+                KNOWLEDGE_MCP_URL, 'update_world', {'narrative_text': dm.gm_speech}, campaign_id, UpdateWorldOut
+            )
+        except Exception:
+            logger.warning('World update after DM turn failed (non-critical)', exc_info=True)
 
-        if dm.invoke_npc:
-            await _handle_npc(campaign_id, dm.invoke_npc, visual_style)
+    await asyncio.gather(_speak(), _image(), _memory_and_world())
 
-    asyncio.create_task(_background())
+    if dm.invoke_npc:
+        await _handle_npc(campaign_id, dm.invoke_npc, visual_style)
 
     return dm.gm_speech
 

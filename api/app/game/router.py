@@ -18,7 +18,7 @@ from .schemas import PlayerMessage, AudioUploadResponse
 
 router = APIRouter(tags=['game'])
 
-LOCK_TTL = 60  # seconds
+LOCK_TTL = 180  # seconds — must exceed LLM timeout (90s) + image gen (120s)
 
 
 async def _assert_campaign_owner(campaign_id: str, user_id: str, db: AsyncSession) -> None:
