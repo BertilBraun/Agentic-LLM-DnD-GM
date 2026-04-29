@@ -1,13 +1,20 @@
 """Character creator agent (Section 5.2)."""
 from __future__ import annotations
 
-import json
 import logging
 import os
 
-import redis.asyncio as aioredis
+from pydantic import BaseModel, Field
 
-from shared.helpers import call_mcp, call_llm, call_llm_json, publish_event, REDIS_URL
+from shared.helpers import call_mcp, call_llm, call_llm_structured, publish_event
+from shared.mcp_models import (
+    CampaignContextOut,
+    GetTurnsOut,
+    ImageOut,
+    LogTurnOut,
+    OkOut,
+    SpeakOut,
+)
 
 STATE_MCP_URL = os.environ.get("STATE_MCP_URL", "http://state-mcp:8001")
 MEDIA_MCP_URL = os.environ.get("MEDIA_MCP_URL", "http://media-mcp:8004")
@@ -36,78 +43,85 @@ CHARACTER_PARSE_PROMPT = """Based on the conversation, create a complete PlayerC
 Ensure the character has meaningful limitations and a realistic power level."""
 
 
+class PlayerCharacter(BaseModel):
+    name: str = ""
+    background: str = ""
+    class_and_level: str = ""
+    abilities: list[str] = Field(default_factory=list)
+    equipment: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+    power_level: str = "Novice"
+    visual_description: str = ""
+
+
 async def run(campaign_id: str, player_message: str) -> str:
-    redis_client = aioredis.from_url(REDIS_URL)
+    # 1. Load context
+    ctx = await call_mcp(STATE_MCP_URL, "get_campaign_context", {}, campaign_id, CampaignContextOut)
+    turns_resp = await call_mcp(STATE_MCP_URL, "get_turns", {"limit": 20}, campaign_id, GetTurnsOut)
+
+    # 2. Build messages
+    messages: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    for t in turns_resp.turns:
+        role = "assistant" if t.role in ("dm", "system") else "user"
+        messages.append({"role": role, "content": t.content})
+    if player_message:
+        messages.append({"role": "user", "content": player_message})
+        await call_mcp(STATE_MCP_URL, "log_turn", {"role": "player", "content": player_message}, campaign_id, LogTurnOut)
+
+    # 3. LLM call
+    llm_resp = await call_llm(messages)
+    response_text: str = llm_resp["text"]
+
+    done = "[DONE]" in response_text
+    clean_text = response_text.replace("[DONE]", "").strip()
+
+    # 4. Log DM response
+    await call_mcp(STATE_MCP_URL, "log_turn", {"role": "dm", "content": clean_text}, campaign_id, LogTurnOut)
+
+    # 5. Publish text + audio
+    await publish_event(campaign_id, {"type": "dm_text", "content": clean_text})
+
     try:
-        # 1. Load context
-        ctx = await call_mcp(STATE_MCP_URL, "get_campaign_context", {}, campaign_id)
-        turns_resp = await call_mcp(STATE_MCP_URL, "get_turns", {"limit": 20}, campaign_id)
-        turns = turns_resp.get("turns", [])
+        speak_resp = await call_mcp(
+            MEDIA_MCP_URL, "speak",
+            {"text": clean_text, "voice_id": DM_VOICE_ID, "voice_instructions": DM_VOICE_INSTRUCTIONS},
+            campaign_id, SpeakOut,
+        )
+        if speak_resp.file_path:
+            await publish_event(campaign_id, {"type": "audio_ready", "file_path": speak_resp.file_path})
+    except Exception:
+        logger.warning("TTS failed during character creation (non-critical)", exc_info=True)
 
-        # 2. Build messages
-        messages: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}]
-        for t in turns:
-            role = "assistant" if t["role"] in ("dm", "system") else "user"
-            messages.append({"role": role, "content": t["content"]})
-        if player_message:
-            messages.append({"role": "user", "content": player_message})
-            await call_mcp(STATE_MCP_URL, "log_turn", {"role": "player", "content": player_message}, campaign_id)
+    # 6. If done, parse character + generate portrait + transition
+    if done:
+        parse_messages = messages + [
+            {"role": "assistant", "content": response_text},
+            {"role": "user", "content": CHARACTER_PARSE_PROMPT},
+        ]
+        character = await call_llm_structured(parse_messages, PlayerCharacter)
 
-        # 3. LLM call
-        llm_resp = await call_llm(messages)
-        response_text: str = llm_resp["text"]
+        visual_style = ctx.campaign.visual_style or "fantasy digital art"
 
-        done = "[DONE]" in response_text
-        clean_text = response_text.replace("[DONE]", "").strip()
-
-        # 4. Log DM response
-        await call_mcp(STATE_MCP_URL, "log_turn", {"role": "dm", "content": clean_text}, campaign_id)
-
-        # 5. Publish text + audio
-        await publish_event(redis_client, campaign_id, {"type": "dm_text", "content": clean_text})
-
+        portrait_path: str | None = None
         try:
-            speak_resp = await call_mcp(
-                MEDIA_MCP_URL, "speak",
-                {"text": clean_text, "voice_id": DM_VOICE_ID, "voice_instructions": DM_VOICE_INSTRUCTIONS},
-                campaign_id,
+            img_resp = await call_mcp(
+                MEDIA_MCP_URL, "generate_image",
+                {"prompt": character.visual_description, "style": visual_style, "type": "portrait"},
+                campaign_id, ImageOut,
             )
-            await publish_event(redis_client, campaign_id, {"type": "audio_ready", "file_path": speak_resp["file_path"]})
+            portrait_path = img_resp.file_path or None
         except Exception:
-            logger.warning("TTS failed during character creation (non-critical)", exc_info=True)
+            logger.warning("Portrait generation failed during character creation (non-critical)", exc_info=True)
 
-        # 6. If done, parse character + generate portrait + transition
-        if done:
-            parse_messages = messages + [
-                {"role": "assistant", "content": response_text},
-                {"role": "user", "content": CHARACTER_PARSE_PROMPT},
-            ]
-            character_json = await call_llm_json(parse_messages)
+        await call_mcp(
+            STATE_MCP_URL, "save_character",
+            {"character_json": character.model_dump(), "portrait_path": portrait_path},
+            campaign_id, OkOut,
+        )
+        await call_mcp(STATE_MCP_URL, "set_phase", {"phase": "campaign_design"}, campaign_id, OkOut)
 
-            visual_style = (ctx.get("campaign") or {}).get("visual_style", "fantasy digital art")
+        if portrait_path:
+            await publish_event(campaign_id, {"type": "portrait_ready", "file_path": portrait_path})
+        await publish_event(campaign_id, {"type": "phase_change", "phase": "campaign_design"})
 
-            portrait_path: str | None = None
-            try:
-                img_resp = await call_mcp(
-                    MEDIA_MCP_URL, "generate_image",
-                    {"prompt": character_json.get("visual_description", ""), "style": visual_style, "type": "portrait"},
-                    campaign_id,
-                )
-                portrait_path = img_resp.get("file_path")
-            except Exception:
-                logger.warning("Portrait generation failed during character creation (non-critical)", exc_info=True)
-
-            await call_mcp(
-                STATE_MCP_URL, "save_character",
-                {"character_json": character_json, "portrait_path": portrait_path},
-                campaign_id,
-            )
-            await call_mcp(STATE_MCP_URL, "set_phase", {"phase": "campaign_design"}, campaign_id)
-
-            if portrait_path:
-                await publish_event(redis_client, campaign_id, {"type": "portrait_ready", "file_path": portrait_path})
-            await publish_event(redis_client, campaign_id, {"type": "phase_change", "phase": "campaign_design"})
-
-        return clean_text
-    finally:
-        await redis_client.aclose()
+    return clean_text

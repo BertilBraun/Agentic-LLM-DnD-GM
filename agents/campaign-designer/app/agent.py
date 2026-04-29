@@ -5,9 +5,16 @@ import json
 import logging
 import os
 
-import redis.asyncio as aioredis
+from pydantic import BaseModel, Field
 
-from shared.helpers import call_mcp, call_llm, call_llm_json, publish_event, REDIS_URL
+from shared.helpers import call_mcp, call_llm, call_llm_structured, publish_event
+from shared.mcp_models import (
+    CampaignContextOut,
+    GetTurnsOut,
+    LogTurnOut,
+    OkOut,
+    UpdateWorldOut,
+)
 
 STATE_MCP_URL = os.environ.get("STATE_MCP_URL", "http://state-mcp:8001")
 KNOWLEDGE_MCP_URL = os.environ.get("KNOWLEDGE_MCP_URL", "http://knowledge-mcp:8003")
@@ -31,60 +38,63 @@ PLAN_PARSE_PROMPT = """Based on the conversation, create a complete CampaignPlan
 Make the visual_style rich: art style, color palette, lighting, atmosphere, level of detail."""
 
 
+class CampaignPlan(BaseModel):
+    title: str = ""
+    synopsis: str = ""
+    acts: list[str] = Field(default_factory=list)
+    visual_style: str = ""
+    character_context: str = ""
+
+
 async def run(campaign_id: str, player_message: str) -> str:
-    redis_client = aioredis.from_url(REDIS_URL)
-    try:
-        # 1. Load context
-        ctx = await call_mcp(STATE_MCP_URL, "get_campaign_context", {}, campaign_id)
-        character = ctx.get("character") or {}
-        turns_resp = await call_mcp(STATE_MCP_URL, "get_turns", {"limit": 20}, campaign_id)
-        turns = turns_resp.get("turns", [])
+    # 1. Load context
+    ctx = await call_mcp(STATE_MCP_URL, "get_campaign_context", {}, campaign_id, CampaignContextOut)
+    turns_resp = await call_mcp(STATE_MCP_URL, "get_turns", {"limit": 20}, campaign_id, GetTurnsOut)
 
-        # 2. Build messages
-        system = SYSTEM_TEMPLATE.format(character_json=json.dumps(character, indent=2))
-        messages: list[dict] = [{"role": "system", "content": system}]
-        for t in turns:
-            role = "assistant" if t["role"] in ("dm", "system") else "user"
-            messages.append({"role": role, "content": t["content"]})
-        if player_message:
-            messages.append({"role": "user", "content": player_message})
-            await call_mcp(STATE_MCP_URL, "log_turn", {"role": "player", "content": player_message}, campaign_id)
+    # 2. Build messages
+    character_json = json.dumps(ctx.character.model_dump() if ctx.character else {}, indent=2)
+    system = SYSTEM_TEMPLATE.format(character_json=character_json)
+    messages: list[dict] = [{"role": "system", "content": system}]
+    for t in turns_resp.turns:
+        role = "assistant" if t.role in ("dm", "system") else "user"
+        messages.append({"role": role, "content": t.content})
+    if player_message:
+        messages.append({"role": "user", "content": player_message})
+        await call_mcp(STATE_MCP_URL, "log_turn", {"role": "player", "content": player_message}, campaign_id, LogTurnOut)
 
-        # 3. LLM call
-        llm_resp = await call_llm(messages)
-        response_text: str = llm_resp["text"]
+    # 3. LLM call
+    llm_resp = await call_llm(messages)
+    response_text: str = llm_resp["text"]
 
-        done = "[DONE]" in response_text
-        clean_text = response_text.replace("[DONE]", "").strip()
+    done = "[DONE]" in response_text
+    clean_text = response_text.replace("[DONE]", "").strip()
 
-        # 4. Log + publish
-        await call_mcp(STATE_MCP_URL, "log_turn", {"role": "dm", "content": clean_text}, campaign_id)
-        await publish_event(redis_client, campaign_id, {"type": "dm_text", "content": clean_text})
+    # 4. Log + publish
+    await call_mcp(STATE_MCP_URL, "log_turn", {"role": "dm", "content": clean_text}, campaign_id, LogTurnOut)
+    await publish_event(campaign_id, {"type": "dm_text", "content": clean_text})
 
-        # 5. If done, parse plan + seed world + transition
-        if done:
-            parse_messages = messages + [
-                {"role": "assistant", "content": response_text},
-                {"role": "user", "content": PLAN_PARSE_PROMPT},
-            ]
-            plan_json = await call_llm_json(parse_messages)
+    # 5. If done, parse plan + seed world + transition
+    if done:
+        parse_messages = messages + [
+            {"role": "assistant", "content": response_text},
+            {"role": "user", "content": PLAN_PARSE_PROMPT},
+        ]
+        plan = await call_llm_structured(parse_messages, CampaignPlan)
 
-            await call_mcp(
-                STATE_MCP_URL, "save_campaign_plan",
-                {"plan_json": plan_json, "visual_style": plan_json.get("visual_style")},
-                campaign_id,
-            )
+        await call_mcp(
+            STATE_MCP_URL, "save_campaign_plan",
+            {"plan_json": plan.model_dump(), "visual_style": plan.visual_style},
+            campaign_id, OkOut,
+        )
 
-            try:
-                seed_text = plan_json.get("synopsis", "") + " " + " ".join(plan_json.get("acts", []))
-                await call_mcp(KNOWLEDGE_MCP_URL, "update_world", {"narrative_text": seed_text}, campaign_id)
-            except Exception:
-                logger.warning("Failed to seed knowledge base during campaign plan finalization", exc_info=True)
+        try:
+            seed_text = plan.synopsis + " " + " ".join(plan.acts)
+            await call_mcp(KNOWLEDGE_MCP_URL, "update_world", {"narrative_text": seed_text}, campaign_id, UpdateWorldOut)
+        except Exception:
+            logger.warning("Failed to seed knowledge base during campaign plan finalization", exc_info=True)
 
-            await call_mcp(STATE_MCP_URL, "set_phase", {"phase": "active"}, campaign_id)
-            await publish_event(redis_client, campaign_id, {"type": "campaign_plan_ready", "plan": plan_json})
-            await publish_event(redis_client, campaign_id, {"type": "phase_change", "phase": "active"})
+        await call_mcp(STATE_MCP_URL, "set_phase", {"phase": "active"}, campaign_id, OkOut)
+        await publish_event(campaign_id, {"type": "campaign_plan_ready", "plan": plan.model_dump()})
+        await publish_event(campaign_id, {"type": "phase_change", "phase": "active"})
 
-        return clean_text
-    finally:
-        await redis_client.aclose()
+    return clean_text

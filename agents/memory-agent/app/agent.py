@@ -5,7 +5,10 @@ import logging
 import os
 import uuid
 
-from shared.helpers import call_mcp, call_llm_json
+from pydantic import BaseModel
+
+from shared.helpers import call_mcp, call_llm_structured
+from shared.mcp_models import GetMemoryOut, OkOut, RecallOut
 
 STATE_MCP_URL = os.environ.get("STATE_MCP_URL", "http://state-mcp:8001")
 MEMORY_MCP_URL = os.environ.get("MEMORY_MCP_URL", "http://memory-mcp:8002")
@@ -46,47 +49,57 @@ Your task:
 Respond with JSON: {"compressed_long_term": "...", "session_summary": "..."}"""
 
 
+class MemoryCutoffDecision(BaseModel):
+    reason: str = ""
+    should_compress: bool = False
+
+
+class MemoryCompression(BaseModel):
+    compressed_long_term: str = ""
+    session_summary: str = ""
+
+
 async def run(campaign_id: str, query: str, new_event: str) -> dict:
     """Returns {recalled_context, long_term_summary, recent_events}."""
 
     # 1. Load current memory state
-    mem = await call_mcp(STATE_MCP_URL, "get_memory", {}, campaign_id)
-    short_term: list[str] = mem.get("short_term", [])
-    long_term: str = mem.get("long_term", "")
+    mem = await call_mcp(STATE_MCP_URL, "get_memory", {}, campaign_id, GetMemoryOut)
+    short_term: list[str] = list(mem.short_term)
+    long_term: str = mem.long_term
 
     # 2. Store new event if provided
     if new_event:
         turn_id = str(uuid.uuid4())
-        await call_mcp(MEMORY_MCP_URL, "store", {"turn_id": turn_id, "text": new_event, "role": "dm"}, campaign_id)
+        await call_mcp(MEMORY_MCP_URL, "store", {"turn_id": turn_id, "text": new_event, "role": "dm"}, campaign_id, OkOut)
         short_term.append(new_event)
 
     # 3. Semantic recall
-    recall_result = await call_mcp(MEMORY_MCP_URL, "recall", {"query": query, "top_k": 8}, campaign_id)
-    recalled_context: str = recall_result.get("context", "")
+    recall_result = await call_mcp(MEMORY_MCP_URL, "recall", {"query": query, "top_k": 8}, campaign_id, RecallOut)
+    recalled_context: str = recall_result.context
 
     # 4. Check if we should compress
     if len(short_term) >= STM_THRESHOLD:
         recent_events_text = "\n".join(short_term)
         try:
-            decision = await call_llm_json([
+            decision = await call_llm_structured([
                 {"role": "system", "content": CUTOFF_SYSTEM},
                 {"role": "user", "content": f"RECENT EVENTS:\n{recent_events_text}"},
-            ])
-            if decision.get("should_compress"):
-                compression = await call_llm_json([
+            ], MemoryCutoffDecision)
+            if decision.should_compress:
+                compression = await call_llm_structured([
                     {"role": "system", "content": COMPRESSION_SYSTEM},
                     {"role": "user", "content": (
                         f"CURRENT LONG-TERM MEMORY:\n{long_term}\n\n"
                         f"SHORT-TERM MEMORY TO COMPRESS:\n{recent_events_text}"
                     )},
-                ])
-                long_term = compression.get("compressed_long_term", long_term)
+                ], MemoryCompression)
+                long_term = compression.compressed_long_term or long_term
                 short_term = short_term[-3:]  # keep last 3 events
         except Exception:
             logger.warning("Memory compression failed (non-critical)", exc_info=True)
 
     # 5. Persist updated memory
-    await call_mcp(STATE_MCP_URL, "update_memory", {"short_term": short_term, "long_term": long_term}, campaign_id)
+    await call_mcp(STATE_MCP_URL, "update_memory", {"short_term": short_term, "long_term": long_term}, campaign_id, OkOut)
 
     return {
         "recalled_context": recalled_context,

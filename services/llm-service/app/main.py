@@ -52,6 +52,7 @@ def get_db_session() -> async_sessionmaker | None:
 class GenerateRequest(BaseModel):
     messages: list[dict]
     response_format: Optional[str] = 'text'  # text | json
+    response_json_schema: Optional[dict] = None
     user_id: Optional[str] = None
     cache: Optional[bool] = True
 
@@ -69,6 +70,8 @@ async def generate(req: GenerateRequest) -> GenerateResponse:
     cache_key = None
     if req.cache:
         raw = json.dumps(req.messages, sort_keys=True) + (req.response_format or 'text')
+        if req.response_json_schema:
+            raw += json.dumps(req.response_json_schema, sort_keys=True)
         cache_key = f'llm:{hashlib.sha256(raw.encode()).hexdigest()}'
         cached = await get_redis().get(cache_key)
         if cached:
@@ -86,10 +89,14 @@ async def generate(req: GenerateRequest) -> GenerateResponse:
             input=req.messages,
             metadata={'response_format': req.response_format, 'user_id': req.user_id},
         ) as generation:
-            text_out, tokens_in, tokens_out = await provider.generate(req.messages, req.response_format or 'text')
+            text_out, tokens_in, tokens_out = await provider.generate(
+                req.messages, req.response_format or 'text', req.response_json_schema
+            )
             generation.update(output=text_out, usage={'input': tokens_in, 'output': tokens_out})
     else:
-        text_out, tokens_in, tokens_out = await provider.generate(req.messages, req.response_format or 'text')
+        text_out, tokens_in, tokens_out = await provider.generate(
+            req.messages, req.response_format or 'text', req.response_json_schema
+        )
 
     if cache_key:
         payload = json.dumps({'text': text_out, 'tokens_in': tokens_in, 'tokens_out': tokens_out})
