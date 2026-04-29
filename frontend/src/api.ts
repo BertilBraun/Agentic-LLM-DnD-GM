@@ -1,11 +1,37 @@
 const BASE = import.meta.env.VITE_API_BASE_URL ?? '/api/v1'
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+// Shared promise so concurrent 401s share one refresh attempt
+let refreshPromise: Promise<string> | null = null
+
+async function request<T>(path: string, init?: RequestInit, isRetry = false): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
     ...init,
   })
+
+  if (res.status === 401 && !isRetry && path !== '/auth/refresh' && path !== '/auth/login') {
+    if (!refreshPromise) {
+      refreshPromise = fetch(`${BASE}/auth/refresh`, { method: 'POST', credentials: 'include' })
+        .then(async (r) => {
+          if (!r.ok) throw new Error('refresh failed')
+          const { access_token } = await r.json()
+          // Dynamically import to avoid circular module dep at load time
+          const { useAuthStore } = await import('./store/authStore')
+          useAuthStore.getState().login(access_token)
+          return access_token
+        })
+        .catch(async () => {
+          const { useAuthStore } = await import('./store/authStore')
+          useAuthStore.getState().logout()
+          throw new Error('Session expired. Please log in again.')
+        })
+        .finally(() => { refreshPromise = null })
+    }
+    await refreshPromise
+    return request<T>(path, init, true)
+  }
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(err.detail ?? res.statusText)
@@ -19,6 +45,10 @@ export const api = {
       request('/auth/register', { method: 'POST', body: JSON.stringify({ email, password }) }),
     login: (email: string, password: string) =>
       request<{ access_token: string }>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+    refresh: () =>
+      request<{ access_token: string }>('/auth/refresh', { method: 'POST' }),
+    logout: () =>
+      request('/auth/logout', { method: 'POST' }),
   },
   campaigns: {
     list: () => request<Campaign[]>('/campaigns'),

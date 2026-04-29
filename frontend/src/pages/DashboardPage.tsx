@@ -11,6 +11,12 @@ export function DashboardPage() {
   const logout = useAuthStore((s) => s.logout)
   const navigate = useNavigate()
 
+  const handleLogout = async () => {
+    await api.auth.logout().catch(() => {})
+    logout()
+    navigate('/login')
+  }
+
   const load = async () => {
     setLoading(true)
     try {
@@ -36,7 +42,7 @@ export function DashboardPage() {
           <button onClick={newCampaign} style={{ padding: '8px 16px', cursor: 'pointer', background: '#5b21b6', color: '#fff', border: 'none', borderRadius: 6 }}>
             + New Campaign
           </button>
-          <button onClick={logout} style={{ padding: '8px 16px', cursor: 'pointer' }}>Log out</button>
+          <button onClick={handleLogout} style={{ padding: '8px 16px', cursor: 'pointer' }}>Log out</button>
         </div>
       </div>
       {loading ? <Spinner /> : campaigns.length === 0 ? (
