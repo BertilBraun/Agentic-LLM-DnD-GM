@@ -1,8 +1,8 @@
-# Voice-Driven D&D Game Master — Product Overview
+# Voice-Driven AI Story Narrator — Product Overview
 
-An AI-powered Dungeon Master that brings D&D campaigns to life with voice interaction, dynamic image generation, and intelligent memory management. Speak your actions, listen to the DM's responses, and watch your adventure unfold visually in real-time.
+An AI-powered story narrator that brings tabletop roleplay campaigns to life with voice interaction, dynamic image generation, and intelligent memory management. Speak your actions, listen to the narrator's responses, and watch your adventure unfold visually in real-time.
 
-![Voice-Driven D&D Screenshot](example-gui.png)
+![Screenshot](example-gui.png)
 
 ## Features
 

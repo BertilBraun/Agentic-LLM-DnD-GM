@@ -2,7 +2,7 @@
 
 A production-grade multi-agent AI platform demonstrating practical application of knowledge graphs, vector databases, multi-agent orchestration via standardised protocols (A2A, MCP), and full-stack observability for LLM-based systems.
 
-> The system is deployed as an interactive AI Dungeon Master — see [documentation/PRODUCT.md](documentation/PRODUCT.md) for the product context. This document covers the engineering.
+> The system is deployed as an interactive AI story narrator for tabletop-style roleplay — see [documentation/PRODUCT.md](documentation/PRODUCT.md) for the product context. This document covers the engineering.
 
 ---
 
