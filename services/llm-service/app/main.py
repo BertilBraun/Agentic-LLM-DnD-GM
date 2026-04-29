@@ -86,7 +86,8 @@ async def generate(req: GenerateRequest) -> GenerateResponse:
 
     if _langfuse is not None:
         model_name = os.environ.get('GEMINI_MODEL', os.environ.get('OPENAI_MODEL', os.environ.get('ANTHROPIC_MODEL', 'unknown')))
-        with _langfuse.start_as_current_generation(
+        with _langfuse.start_as_current_observation(
+            as_type='generation',
             name='llm-generate',
             model=model_name,
             input=req.messages,
