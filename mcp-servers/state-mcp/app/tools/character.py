@@ -1,5 +1,7 @@
 import json
-from fastapi import APIRouter, Depends, Request
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,8 +16,8 @@ async def save_character(
     body: SaveCharacterIn,
     request: Request,
     db: AsyncSession = Depends(get_session),
-):
-    campaign_id = request.state.campaign_id
+) -> SaveCharacterOut:
+    campaign_id: str = request.state.campaign_id
     c = body.character_json
     row = await db.execute(
         text("""
@@ -59,8 +61,8 @@ async def save_character(
 async def get_campaign_context(
     request: Request,
     db: AsyncSession = Depends(get_session),
-):
-    campaign_id = request.state.campaign_id
+) -> CampaignContextOut:
+    campaign_id: str = request.state.campaign_id
     row = await db.execute(
         text("""
             SELECT c.id, c.title, c.language, c.phase, c.plan_json, c.visual_style,
@@ -75,10 +77,9 @@ async def get_campaign_context(
     )
     r = row.mappings().first()
     if r is None:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Campaign not found")
 
-    campaign = {
+    campaign: dict[str, Any] = {
         "id": str(r["id"]),
         "title": r["title"],
         "language": r["language"],
@@ -86,7 +87,7 @@ async def get_campaign_context(
         "plan_json": r["plan_json"],
         "visual_style": r["visual_style"],
     }
-    character = None
+    character: dict[str, Any] | None = None
     if r["char_id"] is not None:
         character = {
             "id": str(r["char_id"]),

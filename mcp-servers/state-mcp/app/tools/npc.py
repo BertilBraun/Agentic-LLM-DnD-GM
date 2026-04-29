@@ -1,4 +1,6 @@
 import json
+from typing import Any
+
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,8 +22,8 @@ async def save_npc(
     body: SaveNPCIn,
     request: Request,
     db: AsyncSession = Depends(get_session),
-):
-    campaign_id = request.state.campaign_id
+) -> SaveNPCOut:
+    campaign_id: str = request.state.campaign_id
     n = body.npc_json
     row = await db.execute(
         text("""
@@ -57,8 +59,8 @@ async def get_npc(
     body: GetNPCIn,
     request: Request,
     db: AsyncSession = Depends(get_session),
-):
-    campaign_id = request.state.campaign_id
+) -> GetNPCOut:
+    campaign_id: str = request.state.campaign_id
     if body.npc_id:
         row = await db.execute(
             text("SELECT * FROM npcs WHERE id = :npc_id AND campaign_id = :campaign_id"),
@@ -82,8 +84,8 @@ async def get_npc(
 async def list_npcs(
     request: Request,
     db: AsyncSession = Depends(get_session),
-):
-    campaign_id = request.state.campaign_id
+) -> ListNPCsOut:
+    campaign_id: str = request.state.campaign_id
     rows = await db.execute(
         text("SELECT * FROM npcs WHERE campaign_id = :campaign_id ORDER BY created_at"),
         {"campaign_id": campaign_id},
@@ -96,8 +98,8 @@ async def set_active_npc(
     body: SetActiveNPCIn,
     request: Request,
     db: AsyncSession = Depends(get_session),
-):
-    campaign_id = request.state.campaign_id
+) -> OkOut:
+    campaign_id: str = request.state.campaign_id
     await db.execute(
         text("""
             UPDATE campaigns SET
@@ -122,8 +124,8 @@ async def set_active_npc(
 async def get_active_npc_state(
     request: Request,
     db: AsyncSession = Depends(get_session),
-):
-    campaign_id = request.state.campaign_id
+) -> ActiveNPCStateOut:
+    campaign_id: str = request.state.campaign_id
     row = await db.execute(
         text("SELECT active_npc_id, active_npc_briefing, active_npc_conv_start FROM campaigns WHERE id = :campaign_id"),
         {"campaign_id": campaign_id},
@@ -142,8 +144,8 @@ async def get_active_npc_state(
 async def clear_active_npc(
     request: Request,
     db: AsyncSession = Depends(get_session),
-):
-    campaign_id = request.state.campaign_id
+) -> OkOut:
+    campaign_id: str = request.state.campaign_id
     await db.execute(
         text("""
             UPDATE campaigns SET
@@ -159,7 +161,7 @@ async def clear_active_npc(
     return OkOut()
 
 
-def _npc_row(r: dict) -> dict:
+def _npc_row(r: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": str(r["id"]),
         "campaign_id": str(r["campaign_id"]),

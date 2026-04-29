@@ -47,7 +47,7 @@ async def upload_audio(
 
     async with httpx.AsyncClient(timeout=120) as client:
         resp = await client.post(
-            f"{settings.state_mcp_url.replace('state-mcp:8001', 'media-mcp:8004')}/tools/transcribe",
+            f"{settings.media_mcp_url}/tools/transcribe",
             json={"file_path": filename},
             headers={"X-Campaign-ID": campaign_id},
         )
@@ -63,7 +63,7 @@ async def send_message(
     body: PlayerMessage,
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, bool]:
     await _assert_campaign_owner(campaign_id, user["user_id"], db)
 
     redis = get_redis()
@@ -129,10 +129,10 @@ async def get_turns(
     play_only: bool = False,
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> list:
+) -> list[dict]:
     await _assert_campaign_owner(campaign_id, user["user_id"], db)
     async with httpx.AsyncClient(timeout=10) as client:
-        body: dict = {"limit": limit}
+        body: dict[str, object] = {"limit": limit}
         if role:
             body["exclude_roles"] = [r for r in ["player", "dm", "npc", "system"] if r != role]
         if npc_name:
@@ -145,7 +145,8 @@ async def get_turns(
             headers={"X-Campaign-ID": campaign_id},
         )
         resp.raise_for_status()
-    return resp.json().get("turns", [])
+    turns: list[dict] = resp.json().get("turns", [])
+    return turns
 
 
 @router.get("/media/{file_path:path}")

@@ -1,6 +1,8 @@
 from typing import Any, Optional
 from pydantic import BaseModel
 
+from shared.schemas import OkOut
+
 
 # create_campaign
 class CreateCampaignIn(BaseModel):
@@ -15,9 +17,6 @@ class CreateCampaignOut(BaseModel):
 class SaveCampaignPlanIn(BaseModel):
     plan_json: dict[str, Any]
     visual_style: Optional[str] = None
-
-class OkOut(BaseModel):
-    ok: bool = True
 
 
 # save_character

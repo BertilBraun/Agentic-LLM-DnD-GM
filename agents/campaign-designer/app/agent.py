@@ -3,11 +3,12 @@ from __future__ import annotations
 
 import json
 import logging
-import os
-
 from pydantic import BaseModel, Field
 
-from shared.helpers import call_mcp, call_llm, call_llm_structured, publish_event
+from shared.helpers import (
+    call_mcp, call_llm, call_llm_structured, publish_event,
+    STATE_MCP_URL, KNOWLEDGE_MCP_URL,
+)
 from shared.mcp_models import (
     CampaignContextOut,
     GetTurnsOut,
@@ -15,9 +16,6 @@ from shared.mcp_models import (
     OkOut,
     UpdateWorldOut,
 )
-
-STATE_MCP_URL = os.environ.get("STATE_MCP_URL", "http://state-mcp:8001")
-KNOWLEDGE_MCP_URL = os.environ.get("KNOWLEDGE_MCP_URL", "http://knowledge-mcp:8003")
 
 logger = logging.getLogger(__name__)
 

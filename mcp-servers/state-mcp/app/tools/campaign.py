@@ -1,3 +1,6 @@
+import json
+from typing import Any
+
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,8 +20,8 @@ async def create_campaign(
     body: CreateCampaignIn,
     request: Request,
     db: AsyncSession = Depends(get_session),
-):
-    user_id = request.state.campaign_id  # reused as user_id during setup
+) -> CreateCampaignOut:
+    user_id: str = request.state.campaign_id  # reused as user_id during setup
     row = await db.execute(
         text(
             "INSERT INTO campaigns (user_id, title, language) "
@@ -36,10 +39,9 @@ async def save_campaign_plan(
     body: SaveCampaignPlanIn,
     request: Request,
     db: AsyncSession = Depends(get_session),
-):
-    import json
-    campaign_id = request.state.campaign_id
-    params: dict = {"campaign_id": campaign_id, "plan_json": json.dumps(body.plan_json)}
+) -> OkOut:
+    campaign_id: str = request.state.campaign_id
+    params: dict[str, Any] = {"campaign_id": campaign_id, "plan_json": json.dumps(body.plan_json)}
     query = "UPDATE campaigns SET plan_json = CAST(:plan_json AS jsonb), updated_at = now()"
     if body.visual_style is not None:
         query += ", visual_style = :visual_style"
@@ -55,8 +57,8 @@ async def set_phase(
     body: SetPhaseIn,
     request: Request,
     db: AsyncSession = Depends(get_session),
-):
-    campaign_id = request.state.campaign_id
+) -> OkOut:
+    campaign_id: str = request.state.campaign_id
     await db.execute(
         text("UPDATE campaigns SET phase = CAST(:phase AS campaign_phase), updated_at = now() WHERE id = :campaign_id"),
         {"phase": body.phase, "campaign_id": campaign_id},

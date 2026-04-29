@@ -2,16 +2,12 @@
 from __future__ import annotations
 
 import logging
-import os
 import uuid
 
 from pydantic import BaseModel
 
-from shared.helpers import call_mcp, call_llm_structured
+from shared.helpers import call_mcp, call_llm_structured, STATE_MCP_URL, MEMORY_MCP_URL
 from shared.mcp_models import GetMemoryOut, OkOut, RecallOut
-
-STATE_MCP_URL = os.environ.get("STATE_MCP_URL", "http://state-mcp:8001")
-MEMORY_MCP_URL = os.environ.get("MEMORY_MCP_URL", "http://memory-mcp:8002")
 
 STM_THRESHOLD = 5
 

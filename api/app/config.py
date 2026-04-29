@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     jwt_access_expire_minutes: int = 15
     jwt_refresh_expire_days: int = 30
     state_mcp_url: str = "http://state-mcp:8001"
+    media_mcp_url: str = "http://media-mcp:8004"
     media_root: str = "/media"
     character_creator_url: str = "http://character-creator:8010"
     campaign_designer_url: str = "http://campaign-designer:8011"

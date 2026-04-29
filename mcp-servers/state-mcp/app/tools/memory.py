@@ -1,5 +1,6 @@
 import json
-from fastapi import APIRouter, Depends, Request
+
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,15 +14,14 @@ router = APIRouter()
 async def get_memory(
     request: Request,
     db: AsyncSession = Depends(get_session),
-):
-    campaign_id = request.state.campaign_id
+) -> GetMemoryOut:
+    campaign_id: str = request.state.campaign_id
     row = await db.execute(
         text("SELECT short_term_memory, long_term_memory FROM campaigns WHERE id = :campaign_id"),
         {"campaign_id": campaign_id},
     )
     r = row.mappings().first()
     if r is None:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Campaign not found")
     stm = r["short_term_memory"]
     if isinstance(stm, str):
@@ -34,8 +34,8 @@ async def update_memory(
     body: UpdateMemoryIn,
     request: Request,
     db: AsyncSession = Depends(get_session),
-):
-    campaign_id = request.state.campaign_id
+) -> OkOut:
+    campaign_id: str = request.state.campaign_id
     await db.execute(
         text("""
             UPDATE campaigns SET

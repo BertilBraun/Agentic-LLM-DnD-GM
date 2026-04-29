@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import logging
-import os
-
 from pydantic import BaseModel, Field
 
-from shared.helpers import call_mcp, call_llm, call_llm_structured, publish_event
+from shared.helpers import (
+    call_mcp, call_llm, call_llm_structured, publish_event,
+    STATE_MCP_URL, MEDIA_MCP_URL, DM_VOICE_ID, DM_VOICE_INSTRUCTIONS,
+)
 from shared.mcp_models import (
     CampaignContextOut,
     GetTurnsOut,
@@ -15,12 +16,6 @@ from shared.mcp_models import (
     OkOut,
     SpeakOut,
 )
-
-STATE_MCP_URL = os.environ.get("STATE_MCP_URL", "http://state-mcp:8001")
-MEDIA_MCP_URL = os.environ.get("MEDIA_MCP_URL", "http://media-mcp:8004")
-
-DM_VOICE_ID = "ash"
-DM_VOICE_INSTRUCTIONS = "Speak in a deep, authoritative voice with dramatic pauses and varied intonation to bring the fantasy world to life"
 
 logger = logging.getLogger(__name__)
 

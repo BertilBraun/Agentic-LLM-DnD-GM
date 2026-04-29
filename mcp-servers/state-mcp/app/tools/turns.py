@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Depends, Request
+import json
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,9 +16,8 @@ async def log_turn(
     body: LogTurnIn,
     request: Request,
     db: AsyncSession = Depends(get_session),
-):
-    import json
-    campaign_id = request.state.campaign_id
+) -> LogTurnOut:
+    campaign_id: str = request.state.campaign_id
     metadata = body.metadata or {}
     if body.audio_path:
         metadata["audio_path"] = body.audio_path
@@ -50,15 +52,14 @@ async def get_turns(
     body: GetTurnsIn,
     request: Request,
     db: AsyncSession = Depends(get_session),
-):
-    campaign_id = request.state.campaign_id
+) -> GetTurnsOut:
+    campaign_id: str = request.state.campaign_id
     limit = body.limit or 20
-    params: dict = {"campaign_id": campaign_id, "limit": limit}
+    params: dict[str, Any] = {"campaign_id": campaign_id, "limit": limit}
 
     where_clauses = ["campaign_id = :campaign_id"]
 
     if body.exclude_roles:
-        # Build parameterized exclude list
         excl_params = {f"excl_{i}": r for i, r in enumerate(body.exclude_roles)}
         placeholders = ", ".join(f"CAST(:{k} AS turn_role)" for k in excl_params)
         where_clauses.append(f"role NOT IN ({placeholders})")
@@ -97,7 +98,6 @@ async def get_turns(
     rows = await db.execute(text(query), params)
     turns = [_turn_row(r) for r in rows.mappings()]
 
-    # Fetch newest rows for bounded history, then display them chronologically.
     if reverse_result:
         turns = list(reversed(turns))
 
@@ -108,15 +108,14 @@ async def get_turns(
 async def get_routing_state(
     request: Request,
     db: AsyncSession = Depends(get_session),
-):
-    campaign_id = request.state.campaign_id
+) -> RoutingStateOut:
+    campaign_id: str = request.state.campaign_id
     row = await db.execute(
         text("SELECT phase, active_npc_id FROM campaigns WHERE id = :campaign_id"),
         {"campaign_id": campaign_id},
     )
     r = row.mappings().first()
     if r is None:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Campaign not found")
     return RoutingStateOut(
         phase=r["phase"],
@@ -124,7 +123,7 @@ async def get_routing_state(
     )
 
 
-def _turn_row(r: dict) -> dict:
+def _turn_row(r: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": str(r["id"]),
         "campaign_id": str(r["campaign_id"]),

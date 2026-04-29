@@ -4,6 +4,7 @@ from qdrant_client.models import PointStruct, Filter, FieldCondition, MatchValue
 
 from ..embedder import embed
 from ..qdrant_client import get_qdrant, COLLECTION
+from shared.schemas import OkOut
 
 router = APIRouter()
 
@@ -16,10 +17,6 @@ class StoreIn(BaseModel):
     role: str
 
 
-class OkOut(BaseModel):
-    ok: bool = True
-
-
 class RecallIn(BaseModel):
     query: str
     top_k: int = 8
@@ -30,8 +27,8 @@ class RecallOut(BaseModel):
 
 
 @router.post("/tools/store", response_model=OkOut)
-async def store(body: StoreIn, request: Request):
-    campaign_id = request.state.campaign_id
+async def store(body: StoreIn, request: Request) -> OkOut:
+    campaign_id: str = request.state.campaign_id
     vector = await embed(body.text)
     client = get_qdrant()
     await client.upsert(
@@ -53,8 +50,8 @@ async def store(body: StoreIn, request: Request):
 
 
 @router.post("/tools/recall", response_model=RecallOut)
-async def recall(body: RecallIn, request: Request):
-    campaign_id = request.state.campaign_id
+async def recall(body: RecallIn, request: Request) -> RecallOut:
+    campaign_id: str = request.state.campaign_id
     query_vector = await embed(body.query)
     client = get_qdrant()
     results = await client.search(

@@ -13,6 +13,17 @@ from pydantic import BaseModel
 LLM_SERVICE_URL = os.environ.get("LLM_SERVICE_URL", "http://llm-service:9001")
 REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
 
+# MCP / agent service URLs — imported by all agent modules
+STATE_MCP_URL = os.environ.get("STATE_MCP_URL", "http://state-mcp:8001")
+MEMORY_MCP_URL = os.environ.get("MEMORY_MCP_URL", "http://memory-mcp:8002")
+KNOWLEDGE_MCP_URL = os.environ.get("KNOWLEDGE_MCP_URL", "http://knowledge-mcp:8003")
+MEDIA_MCP_URL = os.environ.get("MEDIA_MCP_URL", "http://media-mcp:8004")
+MEMORY_AGENT_URL = os.environ.get("MEMORY_AGENT_URL", "http://memory-agent:8014")
+
+# DM voice — shared between character-creator and dm-agent
+DM_VOICE_ID: str = "ash"
+DM_VOICE_INSTRUCTIONS: str = "Speak in a deep, authoritative voice with dramatic pauses and varied intonation to bring the fantasy world to life"
+
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)

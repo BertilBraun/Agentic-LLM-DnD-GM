@@ -4,12 +4,14 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
-
 import httpx
 from pydantic import BaseModel
 
-from shared.helpers import call_mcp, call_llm_structured, publish_event
+from shared.helpers import (
+    call_mcp, call_llm_structured, publish_event,
+    STATE_MCP_URL, KNOWLEDGE_MCP_URL, MEDIA_MCP_URL, MEMORY_AGENT_URL,
+    DM_VOICE_ID, DM_VOICE_INSTRUCTIONS,
+)
 from shared.mcp_models import (
     CampaignContextOut,
     GetTurnsOut,
@@ -22,14 +24,6 @@ from shared.mcp_models import (
     UpdateWorldOut,
     WorldContextOut,
 )
-
-STATE_MCP_URL = os.environ.get("STATE_MCP_URL", "http://state-mcp:8001")
-KNOWLEDGE_MCP_URL = os.environ.get("KNOWLEDGE_MCP_URL", "http://knowledge-mcp:8003")
-MEDIA_MCP_URL = os.environ.get("MEDIA_MCP_URL", "http://media-mcp:8004")
-MEMORY_AGENT_URL = os.environ.get("MEMORY_AGENT_URL", "http://memory-agent:8014")
-
-DM_VOICE_ID = "ash"
-DM_VOICE_INSTRUCTIONS = "Speak in a deep, authoritative voice with dramatic pauses and varied intonation to bring the fantasy world to life"
 
 logger = logging.getLogger(__name__)
 
