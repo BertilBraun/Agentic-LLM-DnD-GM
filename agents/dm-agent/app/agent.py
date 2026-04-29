@@ -176,8 +176,8 @@ async def run(campaign_id: str, player_message: str) -> str:
                     SpeakOut,
                     timeout=90,
                 )
-                if r.file_path:
-                    await publish_event(campaign_id, {'type': 'audio_ready', 'file_path': r.file_path})
+                if r.stream_path:
+                    await publish_event(campaign_id, {'type': 'audio_ready', 'stream_path': r.stream_path})
             except Exception:
                 logger.warning('DM TTS failed (non-critical)', exc_info=True)
 
@@ -256,7 +256,7 @@ async def _handle_npc(campaign_id: str, invoke_npc: InvokeNpc, visual_style: str
         return_exceptions=True,
     )
     portrait_path: str | None = portrait_resp.file_path if isinstance(portrait_resp, ImageOut) else None
-    opening_audio_path: str | None = npc_audio_resp.file_path if isinstance(npc_audio_resp, SpeakOut) else None
+    opening_audio_path: str | None = npc_audio_resp.stream_path if isinstance(npc_audio_resp, SpeakOut) else None
 
     if portrait_path:
         await call_mcp(
@@ -311,4 +311,4 @@ async def _handle_npc(campaign_id: str, invoke_npc: InvokeNpc, visual_style: str
         },
     )
     if opening_audio_path:
-        await publish_event(campaign_id, {'type': 'audio_ready', 'file_path': opening_audio_path})
+        await publish_event(campaign_id, {'type': 'audio_ready', 'stream_path': opening_audio_path})

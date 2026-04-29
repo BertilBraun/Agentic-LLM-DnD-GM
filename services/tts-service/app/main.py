@@ -7,6 +7,7 @@ from typing import Optional
 
 import redis.asyncio as aioredis
 from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 app = FastAPI(title='tts-service')
@@ -74,6 +75,26 @@ async def _openai_tts(text: str, voice_id: str, instructions: str) -> bytes:
     return response.content
 
 
+async def _openai_tts_stream(text: str, voice_id: str, instructions: str, redis_key: str):
+    """Yield WAV chunks from OpenAI streaming API and cache the full result when done."""
+    from openai import AsyncOpenAI
+
+    client = AsyncOpenAI(api_key=os.environ['OPENAI_API_KEY'])
+    model = os.environ.get('OPENAI_TTS_MODEL', 'gpt-4o-mini-tts')
+    chunks: list[bytes] = []
+    async with client.audio.speech.with_streaming_response.create(
+        model=model,
+        voice=voice_id,
+        input=text,
+        instructions=instructions,
+        response_format='wav',
+    ) as response:
+        async for chunk in response.iter_bytes(chunk_size=4096):
+            chunks.append(chunk)
+            yield chunk
+    await get_redis().setex(redis_key, CACHE_TTL, b''.join(chunks))
+
+
 async def _gemini_tts(text: str, voice_id: str, instructions: str) -> bytes:
     from google import genai
     from google.genai import types
@@ -124,6 +145,38 @@ async def speak(req: SpeakRequest) -> SpeakResponse:
         duration_sec=duration,
         cached=False,
     )
+
+
+@app.post('/speak/stream')
+async def speak_stream(req: SpeakRequest) -> StreamingResponse:
+    cache_key = hashlib.sha256(f'{req.text}:{req.voice_id}:{req.voice_instructions}'.encode()).hexdigest()
+    redis_key = f'tts:{cache_key}'
+
+    cached = await get_redis().get(redis_key)
+    if cached:
+        async def _from_cache():
+            offset = 0
+            while offset < len(cached):
+                yield cached[offset : offset + 4096]
+                offset += 4096
+
+        return StreamingResponse(_from_cache(), media_type='audio/wav')
+
+    provider = os.environ.get('TTS_PROVIDER', 'openai')
+    if provider == 'openai':
+        return StreamingResponse(_openai_tts_stream(req.text, req.voice_id, req.voice_instructions, redis_key), media_type='audio/wav')
+
+    # Gemini: no streaming API — generate fully then stream bytes
+    audio_bytes = await _gemini_tts(req.text, req.voice_id, req.voice_instructions)
+    await get_redis().setex(redis_key, CACHE_TTL, audio_bytes)
+
+    async def _from_bytes():
+        offset = 0
+        while offset < len(audio_bytes):
+            yield audio_bytes[offset : offset + 4096]
+            offset += 4096
+
+    return StreamingResponse(_from_bytes(), media_type='audio/wav')
 
 
 @app.get('/health')

@@ -102,7 +102,7 @@ class UpdateWorldOut(BaseModel):
 
 
 class SpeakOut(BaseModel):
-    file_path: str = ''
+    stream_path: str = ''
 
 
 class ImageOut(BaseModel):

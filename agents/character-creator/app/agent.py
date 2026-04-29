@@ -93,8 +93,8 @@ async def run(campaign_id: str, player_message: str) -> str:
             campaign_id,
             SpeakOut,
         )
-        if speak_resp.file_path:
-            await publish_event(campaign_id, {'type': 'audio_ready', 'file_path': speak_resp.file_path})
+        if speak_resp.stream_path:
+            await publish_event(campaign_id, {'type': 'audio_ready', 'stream_path': speak_resp.stream_path})
     except Exception:
         logger.warning('TTS failed during character creation (non-critical)', exc_info=True)
 

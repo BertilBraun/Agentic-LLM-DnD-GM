@@ -145,7 +145,7 @@ async def run(campaign_id: str, player_message: str) -> str:
             SpeakOut,
             timeout=90,
         )
-        audio_path = speak_resp.file_path or None
+        audio_path = speak_resp.stream_path or None
     except Exception:
         logger.warning('TTS failed for NPC speech (non-critical)', exc_info=True)
 
@@ -175,7 +175,7 @@ async def run(campaign_id: str, player_message: str) -> str:
         },
     )
     if audio_path:
-        await publish_event(campaign_id, {'type': 'audio_ready', 'file_path': audio_path})
+        await publish_event(campaign_id, {'type': 'audio_ready', 'stream_path': audio_path})
 
     # 9. If done, summarise and clear
     if npc_turn.done:

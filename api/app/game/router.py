@@ -149,6 +149,21 @@ async def get_turns(
     return turns
 
 
+@router.get('/media/audio/stream/{cache_key}')
+async def stream_audio_proxy(
+    cache_key: str,
+    user: dict = Depends(get_current_user),
+) -> StreamingResponse:
+    async def _proxy():
+        async with httpx.AsyncClient(timeout=90) as client:
+            async with client.stream('GET', f'{settings.media_mcp_url}/audio/stream/{cache_key}') as resp:
+                resp.raise_for_status()
+                async for chunk in resp.aiter_bytes(4096):
+                    yield chunk
+
+    return StreamingResponse(_proxy(), media_type='audio/wav')
+
+
 @router.get('/media/{file_path:path}')
 async def serve_media(
     file_path: str,
