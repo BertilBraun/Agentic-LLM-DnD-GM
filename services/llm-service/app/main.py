@@ -11,7 +11,6 @@ from sqlalchemy import text
 
 from .providers import get_provider
 
-
 import logging
 
 logger = logging.getLogger(__name__)
@@ -20,10 +19,17 @@ logger = logging.getLogger(__name__)
 def _langfuse_enabled() -> bool:
     pk = os.environ.get('LANGFUSE_PUBLIC_KEY')
     sk = os.environ.get('LANGFUSE_SECRET_KEY')
-    return pk is not None and sk is not None and not pk == 'pk-lf-...' and not sk == 'sk-lf-...'
+    return pk is not None and sk is not None and pk != 'pk-lf-...' and sk != 'sk-lf-...'
 
 
 app = FastAPI(title='llm-service')
+
+# Initialise Langfuse once at module load so the SDK registers its OTel exporter
+# before any request arrives. Lazy get_client() per-request misses the startup window.
+_langfuse = None
+if _langfuse_enabled():
+    from langfuse import get_client as _lf_get_client
+    _langfuse = _lf_get_client()
 
 REDIS_URL = os.environ.get('REDIS_URL', 'redis://redis:6379/0')
 DATABASE_URL = os.environ.get('DATABASE_URL', '')
@@ -78,21 +84,21 @@ async def generate(req: GenerateRequest) -> GenerateResponse:
             data = json.loads(cached)
             return GenerateResponse(cached=True, **data)
 
-    if _langfuse_enabled():
-        from langfuse import get_client
-
-        lf = get_client()
-        with lf.start_as_current_observation(
-            as_type='generation',
+    if _langfuse is not None:
+        model_name = os.environ.get('GEMINI_MODEL', os.environ.get('OPENAI_MODEL', os.environ.get('ANTHROPIC_MODEL', 'unknown')))
+        with _langfuse.start_as_current_generation(
             name='llm-generate',
-            model=os.environ.get('GEMINI_MODEL', 'gemini-3.1-flash-lite-preview'),
+            model=model_name,
             input=req.messages,
             metadata={'response_format': req.response_format, 'user_id': req.user_id},
         ) as generation:
             text_out, tokens_in, tokens_out = await provider.generate(
                 req.messages, req.response_format or 'text', req.response_json_schema
             )
-            generation.update(output=text_out, usage={'input': tokens_in, 'output': tokens_out})
+            generation.update(
+                output=text_out,
+                usage={'input': tokens_in, 'output': tokens_out, 'unit': 'TOKENS'},
+            )
     else:
         text_out, tokens_in, tokens_out = await provider.generate(
             req.messages, req.response_format or 'text', req.response_json_schema
