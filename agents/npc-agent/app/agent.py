@@ -37,8 +37,15 @@ Respond with JSON:
   "done": boolean
 }}
 
-Never set done=true mid-conversation. End only when the conversation genuinely feels over
-(goodbye said, topic fully resolved, or continuing would feel forced)."""
+Conversation ending policy:
+- Set done=false while the player is still asking questions, negotiating, choosing actions, or inviting a reply.
+- Set done=true when the player clearly ends the exchange, including goodbye/farewell/bye, "I'm leaving",
+  "I have to go", "that's all", "no more questions", "nothing else", or equivalent wording.
+- If the player clearly ends the exchange, do not introduce new topics or ask follow-up questions. Give one
+  brief in-character farewell or acknowledgement, then set done=true.
+- If the player has already tried to close the conversation earlier in CONVERSATION SO FAR, treat another
+  short or indirect close as final.
+- Never keep the conversation open just because your NPC could still say more."""
 
 SUMMARY_SYSTEM = """Summarise this NPC conversation in 1-2 sentences from the DM's perspective,
 noting only what the player learned or agreed to. Be concise.
