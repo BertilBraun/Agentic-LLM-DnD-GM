@@ -74,7 +74,7 @@ async def dispatch(campaign_id: str, message: str) -> None:
             if not routing_after.active_npc_id:
                 summary = result.result.output
                 assert summary, 'NPC agent must return a summary of the conversation when it ends'
-                dm_message = f'(The conversation just ended. {summary})'
+                dm_message = f'[SYSTEM] The NPC conversation just ended. Summary: {summary}'
                 await send_task(settings.dm_agent_url, campaign_id, dm_message)
         else:
             await send_task(settings.dm_agent_url, campaign_id, message)

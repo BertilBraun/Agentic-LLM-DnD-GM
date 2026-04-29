@@ -124,8 +124,10 @@ async def run(campaign_id: str, player_message: str) -> str:
     recalled_context = mem.recalled_context
     recent_events = mem.recent_events
 
-    # 2. Log player turn
-    await call_mcp(STATE_MCP_URL, "log_turn", {"role": "player", "content": player_message}, campaign_id, LogTurnOut)
+    # 2. Log player turn (system-tagged messages are logged as system, not player)
+    is_system_trigger = player_message.startswith("[SYSTEM]")
+    log_role = "system" if is_system_trigger else "player"
+    await call_mcp(STATE_MCP_URL, "log_turn", {"role": log_role, "content": player_message}, campaign_id, LogTurnOut)
 
     # 3. LLM call
     recent_turns_text = "\n".join(f"[{t.role.upper()}] {t.content}" for t in turns)

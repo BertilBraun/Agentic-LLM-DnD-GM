@@ -194,4 +194,6 @@ async def run(campaign_id: str, player_message: str) -> str:
             "summary": summary_text,
         })
 
-    return npc_turn.npc_speech
+        return summary_text
+
+    return ""
