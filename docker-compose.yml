@@ -1,0 +1,532 @@
+version: "3.9"
+
+networks:
+  dnd_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  qdrant_data:
+  neo4j_data:
+  redis_data:
+  media_data:
+  whisper_cache:
+
+services:
+
+  # -------------------------------------------------
+  # Infrastructure
+  # -------------------------------------------------
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - dnd_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    expose:
+      - "5432"
+
+  qdrant:
+    image: qdrant/qdrant:v1.9.2
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - dnd_net
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/6333' 2>/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    expose:
+      - "6333"
+
+  neo4j:
+    image: neo4j:5.19-community
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: ${NEO4J_USER}/${NEO4J_PASSWORD}
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_dbms_security_procedures_unrestricted: "apoc.*"
+    volumes:
+      - neo4j_data:/data
+    networks:
+      - dnd_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:7474 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    expose:
+      - "7687"
+      - "7474"
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --save "" --appendonly no
+    volumes:
+      - redis_data:/data
+    networks:
+      - dnd_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    expose:
+      - "6379"
+
+  # -------------------------------------------------
+  # Provider Services
+  # -------------------------------------------------
+
+  llm-service:
+    build:
+      context: ./services/llm-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      PORT: 9001
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-http://host.docker.internal:3001}
+    networks:
+      - dnd_net
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9001/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    expose:
+      - "9001"
+
+  image-service:
+    build:
+      context: ./services/image-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      IMAGE_PROVIDER: ${IMAGE_PROVIDER:-gemini}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_IMAGE_MODEL: ${GEMINI_IMAGE_MODEL:-gemini-2.5-flash-preview-image-generation}
+      RUNWARE_API_KEY: ${RUNWARE_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      PORT: 9002
+    networks:
+      - dnd_net
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9002/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    expose:
+      - "9002"
+
+  tts-service:
+    build:
+      context: ./services/tts-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      TTS_PROVIDER: ${TTS_PROVIDER:-openai}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_TTS_MODEL: ${OPENAI_TTS_MODEL:-gpt-4o-mini-tts}
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      REDIS_URL: redis://redis:6379/1
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      PORT: 9003
+    volumes:
+      - media_data:/media
+    networks:
+      - dnd_net
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9003/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    expose:
+      - "9003"
+
+  stt-service:
+    build:
+      context: ./services/stt-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      STT_PROVIDER: ${STT_PROVIDER:-whisper_local}
+      WHISPER_MODEL: ${WHISPER_MODEL:-small}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      PORT: 9004
+    volumes:
+      - whisper_cache:/root/.cache/whisper
+      - media_data:/media
+    networks:
+      - dnd_net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request, json; r=json.load(urllib.request.urlopen('http://localhost:9004/health')); assert r.get('model_loaded')"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+    expose:
+      - "9004"
+
+  # -------------------------------------------------
+  # MCP Servers
+  # -------------------------------------------------
+
+  state-mcp:
+    build:
+      context: ./mcp-servers/state-mcp
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      PORT: 8001
+    networks:
+      - dnd_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    expose:
+      - "8001"
+
+  memory-mcp:
+    build:
+      context: ./mcp-servers/memory-mcp
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      QDRANT_URL: http://qdrant:6333
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      PORT: 8002
+    networks:
+      - dnd_net
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    expose:
+      - "8002"
+
+  knowledge-mcp:
+    build:
+      context: ./mcp-servers/knowledge-mcp
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: ${NEO4J_USER}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+      LLM_SERVICE_URL: http://llm-service:9001
+      PORT: 8003
+    networks:
+      - dnd_net
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      llm-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8003/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    expose:
+      - "8003"
+
+  media-mcp:
+    build:
+      context: ./mcp-servers/media-mcp
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      IMAGE_SERVICE_URL: http://image-service:9002
+      TTS_SERVICE_URL: http://tts-service:9003
+      STT_SERVICE_URL: http://stt-service:9004
+      MEDIA_ROOT: /media
+      PORT: 8004
+    volumes:
+      - media_data:/media
+    networks:
+      - dnd_net
+    depends_on:
+      image-service:
+        condition: service_healthy
+      tts-service:
+        condition: service_healthy
+      stt-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8004/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    expose:
+      - "8004"
+
+  # -------------------------------------------------
+  # A2A Agent Services
+  # -------------------------------------------------
+
+  character-creator:
+    build:
+      context: ./agents/character-creator
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      STATE_MCP_URL: http://state-mcp:8001
+      MEDIA_MCP_URL: http://media-mcp:8004
+      LLM_SERVICE_URL: http://llm-service:9001
+      REDIS_URL: redis://redis:6379/0
+      PORT: 8010
+    networks:
+      - dnd_net
+    depends_on:
+      state-mcp:
+        condition: service_healthy
+      media-mcp:
+        condition: service_healthy
+      llm-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8010/.well-known/agent.json')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    expose:
+      - "8010"
+
+  campaign-designer:
+    build:
+      context: ./agents/campaign-designer
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      STATE_MCP_URL: http://state-mcp:8001
+      KNOWLEDGE_MCP_URL: http://knowledge-mcp:8003
+      LLM_SERVICE_URL: http://llm-service:9001
+      REDIS_URL: redis://redis:6379/0
+      PORT: 8011
+    networks:
+      - dnd_net
+    depends_on:
+      state-mcp:
+        condition: service_healthy
+      knowledge-mcp:
+        condition: service_healthy
+      llm-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8011/.well-known/agent.json')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    expose:
+      - "8011"
+
+  memory-agent:
+    build:
+      context: ./agents/memory-agent
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      STATE_MCP_URL: http://state-mcp:8001
+      MEMORY_MCP_URL: http://memory-mcp:8002
+      LLM_SERVICE_URL: http://llm-service:9001
+      REDIS_URL: redis://redis:6379/0
+      PORT: 8014
+    networks:
+      - dnd_net
+    depends_on:
+      state-mcp:
+        condition: service_healthy
+      memory-mcp:
+        condition: service_healthy
+      llm-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8014/.well-known/agent.json')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    expose:
+      - "8014"
+
+  dm-agent:
+    build:
+      context: ./agents/dm-agent
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      STATE_MCP_URL: http://state-mcp:8001
+      KNOWLEDGE_MCP_URL: http://knowledge-mcp:8003
+      MEDIA_MCP_URL: http://media-mcp:8004
+      MEMORY_AGENT_URL: http://memory-agent:8014
+      LLM_SERVICE_URL: http://llm-service:9001
+      REDIS_URL: redis://redis:6379/0
+      PORT: 8012
+    networks:
+      - dnd_net
+    depends_on:
+      state-mcp:
+        condition: service_healthy
+      knowledge-mcp:
+        condition: service_healthy
+      media-mcp:
+        condition: service_healthy
+      memory-agent:
+        condition: service_healthy
+      llm-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8012/.well-known/agent.json')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    expose:
+      - "8012"
+
+  npc-agent:
+    build:
+      context: ./agents/npc-agent
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      STATE_MCP_URL: http://state-mcp:8001
+      KNOWLEDGE_MCP_URL: http://knowledge-mcp:8003
+      MEDIA_MCP_URL: http://media-mcp:8004
+      LLM_SERVICE_URL: http://llm-service:9001
+      REDIS_URL: redis://redis:6379/0
+      PORT: 8013
+    networks:
+      - dnd_net
+    depends_on:
+      state-mcp:
+        condition: service_healthy
+      knowledge-mcp:
+        condition: service_healthy
+      media-mcp:
+        condition: service_healthy
+      llm-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8013/.well-known/agent.json')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    expose:
+      - "8013"
+
+  # -------------------------------------------------
+  # API
+  # -------------------------------------------------
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_EXPIRE_MINUTES: ${JWT_ACCESS_EXPIRE_MINUTES:-60}
+      STATE_MCP_URL: http://state-mcp:8001
+      MEDIA_ROOT: /media
+      CHARACTER_CREATOR_URL: http://character-creator:8010
+      CAMPAIGN_DESIGNER_URL: http://campaign-designer:8011
+      DM_AGENT_URL: http://dm-agent:8012
+      NPC_AGENT_URL: http://npc-agent:8013
+      MEMORY_AGENT_URL: http://memory-agent:8014
+    volumes:
+      - media_data:/media
+    networks:
+      - dnd_net
+    depends_on:
+      state-mcp:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      character-creator:
+        condition: service_healthy
+      campaign-designer:
+        condition: service_healthy
+      dm-agent:
+        condition: service_healthy
+      npc-agent:
+        condition: service_healthy
+      memory-agent:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "${API_PORT:-8000}:8000"
+
+  # -------------------------------------------------
+  # Frontend
+  # -------------------------------------------------
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000/api/v1}
+    restart: unless-stopped
+    networks:
+      - dnd_net
+    depends_on:
+      - api
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
