@@ -7,6 +7,10 @@ x-otel: &otel
   OTEL_EXPORTER_PROMETHEUS_PORT: 9464
   OTEL_LOGS_EXPORTER: none
   OTEL_PYTHON_LOG_CORRELATION: "true"
+  # opentelemetry-instrumentation-openai-v2 has a wrap_function_wrapper kwarg
+  # incompatibility with the installed opentelemetry-instrumentation core;
+  # disable it globally — httpx instrumentation still traces the actual calls
+  OTEL_PYTHON_DISABLED_INSTRUMENTATIONS: openai
 
 networks:
   dnd_net:
