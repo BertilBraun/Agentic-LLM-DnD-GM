@@ -28,7 +28,7 @@ class GenerateImageOut(BaseModel):
 
 
 @router.post("/tools/generate_image", response_model=GenerateImageOut)
-async def generate_image(body: GenerateImageIn):
+async def generate_image(body: GenerateImageIn) -> GenerateImageOut:
     neg = PORTRAIT_NEGATIVE if body.type == "portrait" else NEGATIVE_PROMPT
     full_prompt = f"{body.style}\n\n{body.prompt}\n\nNegative: {neg}"
 

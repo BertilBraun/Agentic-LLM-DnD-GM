@@ -62,7 +62,7 @@ async def _generate_dalle(prompt: str, img_type: str) -> bytes:
 
 
 @app.post("/generate", response_model=GenerateResponse)
-async def generate(req: GenerateRequest):
+async def generate(req: GenerateRequest) -> GenerateResponse:
     cache_key = None
     if req.cache:
         raw = f"{req.prompt}:{req.type}"
@@ -84,7 +84,7 @@ async def generate(req: GenerateRequest):
 
 
 @app.get("/health")
-async def health():
+async def health() -> dict:
     return {
         "ok": True,
         "provider": os.environ.get("IMAGE_PROVIDER", "gemini"),

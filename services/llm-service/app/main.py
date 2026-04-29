@@ -12,6 +12,11 @@ from sqlalchemy import text
 from .providers import get_provider
 
 
+import logging
+
+logger = logging.getLogger(__name__)
+
+
 def _langfuse_enabled() -> bool:
     pk = os.environ.get('LANGFUSE_PUBLIC_KEY')
     sk = os.environ.get('LANGFUSE_SECRET_KEY')
@@ -36,7 +41,7 @@ def get_redis() -> aioredis.Redis:
     return _redis
 
 
-def get_db_session():
+def get_db_session() -> async_sessionmaker | None:
     global _db_engine, _db_session
     if _db_session is None and DATABASE_URL:
         _db_engine = create_async_engine(DATABASE_URL, pool_pre_ping=True)
@@ -59,7 +64,7 @@ class GenerateResponse(BaseModel):
 
 
 @app.post('/generate', response_model=GenerateResponse)
-async def generate(req: GenerateRequest):
+async def generate(req: GenerateRequest) -> GenerateResponse:
     provider = get_provider()
     cache_key = None
     if req.cache:
@@ -95,7 +100,7 @@ async def generate(req: GenerateRequest):
     return GenerateResponse(text=text_out, tokens_in=tokens_in, tokens_out=tokens_out, cached=False)
 
 
-async def _log_usage(user_id: Optional[str], tokens_in: int, tokens_out: int, cached: bool):
+async def _log_usage(user_id: Optional[str], tokens_in: int, tokens_out: int, cached: bool) -> None:
     session_factory = get_db_session()
     if session_factory is None:
         return
@@ -119,11 +124,11 @@ async def _log_usage(user_id: Optional[str], tokens_in: int, tokens_out: int, ca
             )
             await session.commit()
     except Exception:
-        pass  # usage logging is non-critical
+        logger.warning("Usage logging failed (non-critical)", exc_info=True)
 
 
 @app.get('/health')
-async def health():
+async def health() -> dict:
     return {
         'ok': True,
         'provider': os.environ.get('LLM_PROVIDER', 'gemini'),

@@ -1,41 +1,28 @@
-import os
+import json
+
 from fastapi import FastAPI
-from pydantic import BaseModel
+
+from shared.a2a import A2ARequest, A2AResponse, A2AResult, AgentCard
 from .agent import run
 
 app = FastAPI(title="memory-agent")
 
 
-class TaskParams(BaseModel):
-    task_id: str
-    campaign_id: str
-    message: str  # JSON string: {"query": "...", "new_event": "..."}
-
-
 @app.get("/.well-known/agent.json")
-async def agent_card():
-    return {
-        "name": "memory-agent",
-        "description": "Memory consolidation and semantic recall",
-        "version": "1.0.0",
-        "skills": [],
-    }
+async def agent_card() -> dict:
+    return AgentCard(
+        name="memory-agent",
+        description="Memory consolidation and semantic recall",
+    ).model_dump()
 
 
 @app.post("/")
-async def handle(req: dict):
-    params = req.get("params", {})
-    campaign_id = params.get("campaign_id", "")
-    import json
+async def handle(req: A2ARequest) -> A2AResponse:
     try:
-        payload = json.loads(params.get("message", "{}"))
-    except Exception:
+        payload = json.loads(req.params.message)
+    except json.JSONDecodeError:
         payload = {}
-    query = payload.get("query", "")
-    new_event = payload.get("new_event", "")
-    result = await run(campaign_id, query, new_event)
-    return {
-        "jsonrpc": "2.0",
-        "result": {"output": json.dumps(result), "done": True},
-        "id": req.get("id"),
-    }
+    query: str = payload.get("query", "")
+    new_event: str = payload.get("new_event", "")
+    result = await run(req.params.campaign_id, query, new_event)
+    return A2AResponse(result=A2AResult(output=json.dumps(result)), id=req.id)

@@ -24,7 +24,7 @@ class SpeakOut(BaseModel):
 
 
 @router.post("/tools/speak", response_model=SpeakOut)
-async def speak(body: SpeakIn):
+async def speak(body: SpeakIn) -> SpeakOut:
     cache_key = hashlib.sha256(
         f"{body.text}:{body.voice_id}:{body.voice_instructions}".encode()
     ).hexdigest()

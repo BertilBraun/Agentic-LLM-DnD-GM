@@ -159,7 +159,7 @@ async def clear_active_npc(
     return OkOut()
 
 
-def _npc_row(r) -> dict:
+def _npc_row(r: dict) -> dict:
     return {
         "id": str(r["id"]),
         "campaign_id": str(r["campaign_id"]),

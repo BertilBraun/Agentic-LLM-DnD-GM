@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from .middleware import CampaignIDMiddleware
+from shared.middleware import CampaignIDMiddleware
 from .tools import campaign, character, npc, turns, memory
 
 app = FastAPI(title="state-mcp")

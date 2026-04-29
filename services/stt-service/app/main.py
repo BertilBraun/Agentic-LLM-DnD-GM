@@ -17,7 +17,7 @@ _model_loaded = False
 _model_lock = asyncio.Lock()
 
 
-async def _load_model():
+async def _load_model() -> None:
     global _model, _model_loaded
     async with _model_lock:
         if _model_loaded:
@@ -30,7 +30,7 @@ async def _load_model():
 
 
 @app.on_event("startup")
-async def startup():
+async def startup() -> None:
     asyncio.create_task(_load_model())
 
 
@@ -44,7 +44,7 @@ class TranscribeResponse(BaseModel):
 
 
 @app.post("/transcribe", response_model=TranscribeResponse)
-async def transcribe(req: TranscribeRequest):
+async def transcribe(req: TranscribeRequest) -> TranscribeResponse:
     audio_data = base64.b64decode(req.audio_bytes)
     provider = STT_PROVIDER
 
@@ -96,7 +96,7 @@ async def transcribe(req: TranscribeRequest):
 
 
 @app.get("/health")
-async def health():
+async def health() -> dict:
     return {
         "ok": True,
         "provider": STT_PROVIDER,

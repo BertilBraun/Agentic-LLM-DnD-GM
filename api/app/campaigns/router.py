@@ -14,7 +14,7 @@ router = APIRouter(prefix="/campaigns", tags=["campaigns"])
 async def list_campaigns(
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-):
+) -> list[CampaignOut]:
     rows = await db.execute(
         text("SELECT id, title, phase, created_at FROM campaigns WHERE user_id = :uid ORDER BY created_at DESC"),
         {"uid": user["user_id"]},
@@ -30,7 +30,7 @@ async def create_campaign(
     body: CreateCampaignRequest,
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-):
+) -> CampaignOut:
     campaign_id = str(uuid.uuid4())
     row = await db.execute(
         text(
@@ -49,7 +49,7 @@ async def get_campaign(
     campaign_id: str,
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-):
+) -> CampaignDetailOut:
     row = await db.execute(
         text("SELECT * FROM campaigns WHERE id = :id AND user_id = :uid"),
         {"id": campaign_id, "uid": user["user_id"]},
@@ -74,7 +74,7 @@ async def delete_campaign(
     campaign_id: str,
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-):
+) -> dict:
     result = await db.execute(
         text("DELETE FROM campaigns WHERE id = :id AND user_id = :uid"),
         {"id": campaign_id, "uid": user["user_id"]},

@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from .middleware import CampaignIDMiddleware
+from shared.middleware import CampaignIDMiddleware
 from .neo4j_driver import ensure_indexes, close_driver
 from .tools import knowledge
 

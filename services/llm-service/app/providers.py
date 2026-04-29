@@ -9,7 +9,7 @@ class LLMProvider(abc.ABC):
     @abc.abstractmethod
     async def generate(
         self, messages: list[dict], response_format: str
-    ) -> tuple[str, int, int]:
+    ) -> tuple[str, int, int]:  # (text, tokens_in, tokens_out)
         """Returns (text, tokens_in, tokens_out)."""
 
 
@@ -21,7 +21,7 @@ class GeminiProvider(LLMProvider):
         self.client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
         self.model = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite-preview")
 
-    async def generate(self, messages: list[dict], response_format: str):
+    async def generate(self, messages: list[dict], response_format: str) -> tuple[str, int, int]:
         from google.genai import types
         system_parts = [m["content"] for m in messages if m["role"] == "system"]
         contents = _gemini_contents(messages)
@@ -60,7 +60,7 @@ class OpenAIProvider(LLMProvider):
         self.client = AsyncOpenAI(api_key=os.environ["OPENAI_API_KEY"])
         self.model = os.environ.get("OPENAI_MODEL", "gpt-4o")
 
-    async def generate(self, messages: list[dict], response_format: str):
+    async def generate(self, messages: list[dict], response_format: str) -> tuple[str, int, int]:
         kwargs: dict = {}
         if response_format == "json":
             kwargs["response_format"] = {"type": "json_object"}
@@ -82,7 +82,7 @@ class AnthropicProvider(LLMProvider):
         self.client = anthropic.AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
         self.model = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 
-    async def generate(self, messages: list[dict], response_format: str):
+    async def generate(self, messages: list[dict], response_format: str) -> tuple[str, int, int]:
         system_parts = [m["content"] for m in messages if m["role"] == "system"]
         user_messages = [m for m in messages if m["role"] != "system"]
         system = "\n\n".join(system_parts) if system_parts else None

@@ -7,6 +7,6 @@ class CampaignIDMiddleware(BaseHTTPMiddleware):
     All MCP tool handlers use request.state.campaign_id — never a body parameter.
     """
 
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(self, request: Request, call_next) -> None:
         request.state.campaign_id = request.headers.get("X-Campaign-ID")
         return await call_next(request)

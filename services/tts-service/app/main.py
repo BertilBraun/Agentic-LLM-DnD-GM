@@ -96,7 +96,7 @@ async def _gemini_tts(text: str, voice_id: str, instructions: str) -> bytes:
 
 
 @app.post("/speak", response_model=SpeakResponse)
-async def speak(req: SpeakRequest):
+async def speak(req: SpeakRequest) -> SpeakResponse:
     cache_key = hashlib.sha256(
         f"{req.text}:{req.voice_id}:{req.voice_instructions}".encode()
     ).hexdigest()
@@ -129,7 +129,7 @@ async def speak(req: SpeakRequest):
 
 
 @app.get("/health")
-async def health():
+async def health() -> dict:
     return {
         "ok": True,
         "provider": os.environ.get("TTS_PROVIDER", "openai"),

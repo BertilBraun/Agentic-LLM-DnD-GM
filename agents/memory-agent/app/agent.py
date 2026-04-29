@@ -1,17 +1,18 @@
 """Memory agent — mirrors SimpleMemorySystem from src/memory.py (Section 5.6)."""
 from __future__ import annotations
 
-import json
+import logging
 import os
-from typing import Any
+import uuid
 
-import httpx
+from shared.helpers import call_mcp, call_llm_json
 
 STATE_MCP_URL = os.environ.get("STATE_MCP_URL", "http://state-mcp:8001")
 MEMORY_MCP_URL = os.environ.get("MEMORY_MCP_URL", "http://memory-mcp:8002")
-LLM_SERVICE_URL = os.environ.get("LLM_SERVICE_URL", "http://llm-service:9001")
 
 STM_THRESHOLD = 5
+
+logger = logging.getLogger(__name__)
 
 CUTOFF_SYSTEM = """Analyze the following recent D&D session events and determine if this is a good cutoff point for compressing memory.
 
@@ -45,56 +46,34 @@ Your task:
 Respond with JSON: {"compressed_long_term": "...", "session_summary": "..."}"""
 
 
-async def _llm_json(messages: list[dict]) -> dict:
-    async with httpx.AsyncClient(timeout=60) as client:
-        resp = await client.post(
-            f"{LLM_SERVICE_URL}/generate",
-            json={"messages": messages, "response_format": "json"},
-        )
-        resp.raise_for_status()
-        return json.loads(resp.json()["text"])
-
-
-async def _mcp(base_url: str, tool: str, body: dict, campaign_id: str) -> dict:
-    async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.post(
-            f"{base_url}/tools/{tool}",
-            json=body,
-            headers={"X-Campaign-ID": campaign_id},
-        )
-        resp.raise_for_status()
-        return resp.json()
-
-
 async def run(campaign_id: str, query: str, new_event: str) -> dict:
     """Returns {recalled_context, long_term_summary, recent_events}."""
 
     # 1. Load current memory state
-    mem = await _mcp(STATE_MCP_URL, "get_memory", {}, campaign_id)
+    mem = await call_mcp(STATE_MCP_URL, "get_memory", {}, campaign_id)
     short_term: list[str] = mem.get("short_term", [])
     long_term: str = mem.get("long_term", "")
 
     # 2. Store new event if provided
     if new_event:
-        import uuid
         turn_id = str(uuid.uuid4())
-        await _mcp(MEMORY_MCP_URL, "store", {"turn_id": turn_id, "text": new_event, "role": "dm"}, campaign_id)
+        await call_mcp(MEMORY_MCP_URL, "store", {"turn_id": turn_id, "text": new_event, "role": "dm"}, campaign_id)
         short_term.append(new_event)
 
     # 3. Semantic recall
-    recall_result = await _mcp(MEMORY_MCP_URL, "recall", {"query": query, "top_k": 8}, campaign_id)
+    recall_result = await call_mcp(MEMORY_MCP_URL, "recall", {"query": query, "top_k": 8}, campaign_id)
     recalled_context: str = recall_result.get("context", "")
 
     # 4. Check if we should compress
     if len(short_term) >= STM_THRESHOLD:
         recent_events_text = "\n".join(short_term)
         try:
-            decision = await _llm_json([
+            decision = await call_llm_json([
                 {"role": "system", "content": CUTOFF_SYSTEM},
                 {"role": "user", "content": f"RECENT EVENTS:\n{recent_events_text}"},
             ])
             if decision.get("should_compress"):
-                compression = await _llm_json([
+                compression = await call_llm_json([
                     {"role": "system", "content": COMPRESSION_SYSTEM},
                     {"role": "user", "content": (
                         f"CURRENT LONG-TERM MEMORY:\n{long_term}\n\n"
@@ -104,10 +83,10 @@ async def run(campaign_id: str, query: str, new_event: str) -> dict:
                 long_term = compression.get("compressed_long_term", long_term)
                 short_term = short_term[-3:]  # keep last 3 events
         except Exception:
-            pass  # compression failure is non-critical
+            logger.warning("Memory compression failed (non-critical)", exc_info=True)
 
     # 5. Persist updated memory
-    await _mcp(STATE_MCP_URL, "update_memory", {"short_term": short_term, "long_term": long_term}, campaign_id)
+    await call_mcp(STATE_MCP_URL, "update_memory", {"short_term": short_term, "long_term": long_term}, campaign_id)
 
     return {
         "recalled_context": recalled_context,

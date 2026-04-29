@@ -1,4 +1,12 @@
-version: "3.9"
+x-otel: &otel
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
+  OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+  OTEL_TRACES_EXPORTER: otlp
+  OTEL_METRICS_EXPORTER: prometheus
+  OTEL_EXPORTER_PROMETHEUS_HOST: 0.0.0.0
+  OTEL_EXPORTER_PROMETHEUS_PORT: 9464
+  OTEL_LOGS_EXPORTER: none
+  OTEL_PYTHON_LOG_CORRELATION: "true"
 
 networks:
   dnd_net:
@@ -11,6 +19,10 @@ volumes:
   redis_data:
   media_data:
   whisper_cache:
+  tempo_data:
+  prometheus_data:
+  grafana_data:
+  loki_data:
 
 services:
 
@@ -99,6 +111,8 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
+      <<: *otel
+      OTEL_SERVICE_NAME: llm-service
       LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
@@ -133,6 +147,8 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
+      <<: *otel
+      OTEL_SERVICE_NAME: image-service
       IMAGE_PROVIDER: ${IMAGE_PROVIDER:-gemini}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       GEMINI_IMAGE_MODEL: ${GEMINI_IMAGE_MODEL:-gemini-2.5-flash-preview-image-generation}
@@ -160,6 +176,8 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
+      <<: *otel
+      OTEL_SERVICE_NAME: tts-service
       TTS_PROVIDER: ${TTS_PROVIDER:-openai}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENAI_TTS_MODEL: ${OPENAI_TTS_MODEL:-gpt-4o-mini-tts}
@@ -189,6 +207,8 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
+      <<: *otel
+      OTEL_SERVICE_NAME: stt-service
       STT_PROVIDER: ${STT_PROVIDER:-whisper_local}
       WHISPER_MODEL: ${WHISPER_MODEL:-small}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
@@ -213,10 +233,12 @@ services:
 
   state-mcp:
     build:
-      context: ./mcp-servers/state-mcp
-      dockerfile: Dockerfile
+      context: ./mcp-servers
+      dockerfile: state-mcp/Dockerfile
     restart: unless-stopped
     environment:
+      <<: *otel
+      OTEL_SERVICE_NAME: state-mcp
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       PORT: 8001
     networks:
@@ -234,10 +256,12 @@ services:
 
   memory-mcp:
     build:
-      context: ./mcp-servers/memory-mcp
-      dockerfile: Dockerfile
+      context: ./mcp-servers
+      dockerfile: memory-mcp/Dockerfile
     restart: unless-stopped
     environment:
+      <<: *otel
+      OTEL_SERVICE_NAME: memory-mcp
       QDRANT_URL: http://qdrant:6333
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       PORT: 8002
@@ -256,10 +280,12 @@ services:
 
   knowledge-mcp:
     build:
-      context: ./mcp-servers/knowledge-mcp
-      dockerfile: Dockerfile
+      context: ./mcp-servers
+      dockerfile: knowledge-mcp/Dockerfile
     restart: unless-stopped
     environment:
+      <<: *otel
+      OTEL_SERVICE_NAME: knowledge-mcp
       NEO4J_URI: bolt://neo4j:7687
       NEO4J_USER: ${NEO4J_USER}
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
@@ -282,10 +308,12 @@ services:
 
   media-mcp:
     build:
-      context: ./mcp-servers/media-mcp
-      dockerfile: Dockerfile
+      context: ./mcp-servers
+      dockerfile: media-mcp/Dockerfile
     restart: unless-stopped
     environment:
+      <<: *otel
+      OTEL_SERVICE_NAME: media-mcp
       IMAGE_SERVICE_URL: http://image-service:9002
       TTS_SERVICE_URL: http://tts-service:9003
       STT_SERVICE_URL: http://stt-service:9004
@@ -316,10 +344,12 @@ services:
 
   character-creator:
     build:
-      context: ./agents/character-creator
-      dockerfile: Dockerfile
+      context: ./agents
+      dockerfile: character-creator/Dockerfile
     restart: unless-stopped
     environment:
+      <<: *otel
+      OTEL_SERVICE_NAME: character-creator
       STATE_MCP_URL: http://state-mcp:8001
       MEDIA_MCP_URL: http://media-mcp:8004
       LLM_SERVICE_URL: http://llm-service:9001
@@ -344,10 +374,12 @@ services:
 
   campaign-designer:
     build:
-      context: ./agents/campaign-designer
-      dockerfile: Dockerfile
+      context: ./agents
+      dockerfile: campaign-designer/Dockerfile
     restart: unless-stopped
     environment:
+      <<: *otel
+      OTEL_SERVICE_NAME: campaign-designer
       STATE_MCP_URL: http://state-mcp:8001
       KNOWLEDGE_MCP_URL: http://knowledge-mcp:8003
       LLM_SERVICE_URL: http://llm-service:9001
@@ -372,10 +404,12 @@ services:
 
   memory-agent:
     build:
-      context: ./agents/memory-agent
-      dockerfile: Dockerfile
+      context: ./agents
+      dockerfile: memory-agent/Dockerfile
     restart: unless-stopped
     environment:
+      <<: *otel
+      OTEL_SERVICE_NAME: memory-agent
       STATE_MCP_URL: http://state-mcp:8001
       MEMORY_MCP_URL: http://memory-mcp:8002
       LLM_SERVICE_URL: http://llm-service:9001
@@ -400,10 +434,12 @@ services:
 
   dm-agent:
     build:
-      context: ./agents/dm-agent
-      dockerfile: Dockerfile
+      context: ./agents
+      dockerfile: dm-agent/Dockerfile
     restart: unless-stopped
     environment:
+      <<: *otel
+      OTEL_SERVICE_NAME: dm-agent
       STATE_MCP_URL: http://state-mcp:8001
       KNOWLEDGE_MCP_URL: http://knowledge-mcp:8003
       MEDIA_MCP_URL: http://media-mcp:8004
@@ -434,10 +470,12 @@ services:
 
   npc-agent:
     build:
-      context: ./agents/npc-agent
-      dockerfile: Dockerfile
+      context: ./agents
+      dockerfile: npc-agent/Dockerfile
     restart: unless-stopped
     environment:
+      <<: *otel
+      OTEL_SERVICE_NAME: npc-agent
       STATE_MCP_URL: http://state-mcp:8001
       KNOWLEDGE_MCP_URL: http://knowledge-mcp:8003
       MEDIA_MCP_URL: http://media-mcp:8004
@@ -473,6 +511,8 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
+      <<: *otel
+      OTEL_SERVICE_NAME: api
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       REDIS_URL: redis://redis:6379/0
       JWT_SECRET: ${JWT_SECRET}
@@ -512,6 +552,81 @@ services:
       retries: 5
     ports:
       - "${API_PORT:-8000}:8000"
+
+  # -------------------------------------------------
+  # Observability
+  # -------------------------------------------------
+
+  tempo:
+    image: grafana/tempo:2.4.1
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo.yml"]
+    volumes:
+      - ./observability/tempo.yml:/etc/tempo.yml:ro
+      - tempo_data:/var/tempo
+    networks:
+      - dnd_net
+    expose:
+      - "3200"
+      - "4317"
+      - "4318"
+
+  prometheus:
+    image: prom/prometheus:v2.51.2
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --enable-feature=exemplar-storage
+      - --web.enable-remote-write-receiver
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - dnd_net
+    expose:
+      - "9090"
+
+  loki:
+    image: grafana/loki:2.9.8
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    volumes:
+      - loki_data:/loki
+    networks:
+      - dnd_net
+    expose:
+      - "3100"
+
+  promtail:
+    image: grafana/promtail:2.9.8
+    restart: unless-stopped
+    command: ["-config.file=/etc/promtail/config.yml"]
+    volumes:
+      - ./observability/promtail.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - dnd_net
+    depends_on:
+      - loki
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    restart: unless-stopped
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    networks:
+      - dnd_net
+    depends_on:
+      - prometheus
+      - tempo
+      - loki
+    ports:
+      - "${GRAFANA_PORT:-3002}:3000"
 
   # -------------------------------------------------
   # Frontend

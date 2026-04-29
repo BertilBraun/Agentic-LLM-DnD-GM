@@ -72,30 +72,33 @@ async def get_turns(
         where_clauses.append("session_phase = :phase_filter")
         params["phase_filter"] = body.phase_filter
 
-    reverse_order = False
+    order = "DESC"
+    reverse_result = True
 
     if body.since_turn_id:
         where_clauses.append(
             "created_at > (SELECT created_at FROM turns WHERE id = :since_turn_id)"
         )
         params["since_turn_id"] = body.since_turn_id
+        order = "ASC"
+        reverse_result = False
 
     if body.before_turn_id:
         where_clauses.append(
             "created_at < (SELECT created_at FROM turns WHERE id = :before_turn_id)"
         )
         params["before_turn_id"] = body.before_turn_id
-        reverse_order = True
+        order = "DESC"
+        reverse_result = True
 
     where_sql = " AND ".join(where_clauses)
-    order = "DESC" if reverse_order else "ASC"
     query = f"SELECT * FROM turns WHERE {where_sql} ORDER BY created_at {order} LIMIT :limit"
 
     rows = await db.execute(text(query), params)
     turns = [_turn_row(r) for r in rows.mappings()]
 
-    # Re-sort ascending when we fetched in DESC order (before_turn_id case)
-    if reverse_order:
+    # Fetch newest rows for bounded history, then display them chronologically.
+    if reverse_result:
         turns = list(reversed(turns))
 
     return GetTurnsOut(turns=turns)
@@ -121,7 +124,7 @@ async def get_routing_state(
     )
 
 
-def _turn_row(r) -> dict:
+def _turn_row(r: dict) -> dict:
     return {
         "id": str(r["id"]),
         "campaign_id": str(r["campaign_id"]),

@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from .middleware import CampaignIDMiddleware
+from shared.middleware import CampaignIDMiddleware
 from .tools import image, tts, stt
 
 app = FastAPI(title="media-mcp")

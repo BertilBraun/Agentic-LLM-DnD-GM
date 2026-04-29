@@ -20,7 +20,7 @@ _COOKIE_KWARGS = dict(httponly=True, samesite="strict", secure=False)
 
 
 @router.post("/register", response_model=UserOut, status_code=201)
-async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
+async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)) -> UserOut:
     existing = await get_user_by_email(body.email, db)
     if existing:
         raise HTTPException(status_code=409, detail="Email already registered")
@@ -28,7 +28,7 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(body: LoginRequest, response: Response, db: AsyncSession = Depends(get_db)):
+async def login(body: LoginRequest, response: Response, db: AsyncSession = Depends(get_db)) -> TokenResponse:
     user = await get_user_by_email(body.email, db)
     if not user or not verify_password(body.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -40,7 +40,7 @@ async def login(body: LoginRequest, response: Response, db: AsyncSession = Depen
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh(request: Request, response: Response, db: AsyncSession = Depends(get_db)):
+async def refresh(request: Request, response: Response, db: AsyncSession = Depends(get_db)) -> TokenResponse:
     token = request.cookies.get("refresh_token")
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No refresh token")
@@ -62,7 +62,7 @@ async def refresh(request: Request, response: Response, db: AsyncSession = Depen
 
 
 @router.post("/logout")
-async def logout(response: Response):
+async def logout(response: Response) -> dict:
     response.delete_cookie("access_token")
     response.delete_cookie("refresh_token")
     return {"ok": True}

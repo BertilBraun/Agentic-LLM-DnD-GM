@@ -36,7 +36,7 @@ async def upload_audio(
     file: UploadFile = File(...),
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-):
+) -> AudioUploadResponse:
     await _assert_campaign_owner(campaign_id, user["user_id"], db)
 
     ext = Path(file.filename or "recording.webm").suffix or ".webm"
@@ -63,7 +63,7 @@ async def send_message(
     body: PlayerMessage,
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-):
+) -> dict:
     await _assert_campaign_owner(campaign_id, user["user_id"], db)
 
     redis = get_redis()
@@ -93,7 +93,7 @@ async def stream(
     request: Request,
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-):
+) -> StreamingResponse:
     await _assert_campaign_owner(campaign_id, user["user_id"], db)
     redis = get_redis()
 
@@ -129,7 +129,7 @@ async def get_turns(
     play_only: bool = False,
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-):
+) -> list:
     await _assert_campaign_owner(campaign_id, user["user_id"], db)
     async with httpx.AsyncClient(timeout=10) as client:
         body: dict = {"limit": limit}
@@ -152,7 +152,7 @@ async def get_turns(
 async def serve_media(
     file_path: str,
     user: dict = Depends(get_current_user),
-):
+) -> FileResponse:
     full_path = Path(settings.media_root) / file_path
     if not full_path.exists():
         raise HTTPException(status_code=404, detail="File not found")

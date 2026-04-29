@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from .middleware import CampaignIDMiddleware
+from shared.middleware import CampaignIDMiddleware
 from .qdrant_client import ensure_collection
 from .tools import memory
 
