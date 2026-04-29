@@ -1,45 +1,62 @@
-# Voice-Driven D&D Game Master
+# Agentic LLM Orchestration System
 
-A production-grade multi-agent AI system that acts as a real-time Dungeon Master. Built to demonstrate practical experience with knowledge graphs, vector databases, multi-agent orchestration, and observable production LLM systems.
+A production-grade multi-agent AI platform demonstrating practical application of knowledge graphs, vector databases, multi-agent orchestration via standardised protocols (A2A, MCP), and full-stack observability for LLM-based systems.
 
-→ [Product overview](documentation/PRODUCT.md) · [Setup guide](SETUP.md)
+> The system is deployed as an interactive AI Dungeon Master — see [documentation/PRODUCT.md](documentation/PRODUCT.md) for the product context. This document covers the engineering.
 
 ---
 
-## Architecture Overview
+## Architecture
 
-```text
-Browser (React + TypeScript)
-        │  REST + Server-Sent Events (JWT, httpOnly cookie)
-        ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    FastAPI API  :8000                        │
-│  JWT auth · Alembic migrations · A2A dispatcher             │
-│  SSE publisher ──► Redis pub/sub :6379                      │
-└───────────────────────┬─────────────────────────────────────┘
-                        │ A2A  (JSON-RPC 2.0 over HTTP)
-          ┌─────────────┼──────────────┐
-          ▼             ▼              ▼
-  ┌──────────────┐ ┌──────────┐ ┌──────────────────────────────┐
-  │  dm-agent    │ │npc-agent │ │ character-creator             │
-  │    :8012     │ │  :8013   │ │ campaign-designer             │
-  └──────┬───────┘ └────┬─────┘ │ memory-agent    (all :8010+) │
-         │              │       └──────────────────────────────┘
-         └──────┬────────┘
-                │ MCP over HTTP  (X-Campaign-ID header)
-    ┌───────────┼──────────────┬──────────────┐
-    ▼           ▼              ▼              ▼
-┌─────────┐ ┌──────────┐ ┌──────────────┐ ┌──────────┐
-│state-mcp│ │memory-mcp│ │knowledge-mcp │ │media-mcp │
-│  :8001  │ │  :8002   │ │    :8003     │ │  :8004   │
-└────┬────┘ └────┬─────┘ └──────┬───────┘ └────┬─────┘
-     │           │              │               │
-     ▼           ▼              ▼               ▼
- PostgreSQL    Qdrant         Neo4j       llm / image /
- (campaigns,  (semantic      (world       tts / stt
-  turns, NPCs) memory,        knowledge    services
-  Alembic)    1536-dim        graph)       :9001–9004
-              embeddings)
+The system is decomposed into four distinct layers communicating over well-defined protocols. No layer has direct knowledge of another layer's internals.
+
+```mermaid
+graph LR
+    subgraph Client
+        B["Browser\nReact · TypeScript"]
+    end
+
+    subgraph api ["API Layer"]
+        A["FastAPI :8000\nJWT · Alembic · SSE"]
+        R[("Redis :6379\npub/sub · cache")]
+        A <--> R
+    end
+
+    subgraph agents ["Agent Layer — Google A2A protocol"]
+        D["dm-agent :8012"]
+        N["npc-agent :8013"]
+        O["character-creator :8010\ncampaign-designer :8011\nmemory-agent :8014"]
+    end
+
+    subgraph mcp ["MCP Tool Servers — MCP over HTTP"]
+        SM["state-mcp :8001"]
+        MM["memory-mcp :8002"]
+        KM["knowledge-mcp :8003"]
+        MD["media-mcp :8004"]
+    end
+
+    subgraph stores ["Data Stores"]
+        PG[("PostgreSQL 16\nrelational state")]
+        QD[("Qdrant\nvector store")]
+        N4[("Neo4j 5\nknowledge graph")]
+    end
+
+    subgraph providers ["Provider Services — swappable backends"]
+        LS["llm-service :9001\nGemini · OpenAI · Anthropic"]
+        IS["image-service :9002"]
+        TS["tts-service :9003"]
+        SS["stt-service :9004"]
+    end
+
+    B -->|"REST + SSE"| A
+    A -->|"A2A JSON-RPC"| D & N & O
+    D -->|"A2A"| O
+    D & N & O -->|"MCP + X-Campaign-ID"| SM & MM & KM & MD
+    SM --> PG
+    MM --> QD
+    KM --> N4
+    KM & MM --> LS
+    MD --> LS & IS & TS & SS
 ```
 
 ---
@@ -48,53 +65,57 @@ Browser (React + TypeScript)
 
 ### Multi-Agent Architecture via Google A2A
 
-The system is decomposed into five specialised agents, each a standalone FastAPI service communicating via the [Google Agent-to-Agent (A2A) protocol](https://google.github.io/A2A/) — JSON-RPC 2.0 over HTTP with a `/.well-known/agent.json` card endpoint:
+Five independent FastAPI services implement the [Google Agent-to-Agent (A2A) protocol](https://google.github.io/A2A/) — JSON-RPC 2.0 over HTTP with a `/.well-known/agent.json` discovery endpoint. The `api` service reads campaign routing state from the database and dispatches each player message to exactly one agent; no business logic lives in the API layer itself.
 
 | Agent | Port | Responsibility |
 | --- | --- | --- |
 | `character-creator` | 8010 | Guided character creation wizard |
-| `campaign-designer` | 8011 | Campaign plan generation, world seeding |
+| `campaign-designer` | 8011 | Campaign plan generation, world graph seeding |
 | `dm-agent` | 8012 | Core gameplay: narration, scene images, NPC invocation |
-| `npc-agent` | 8013 | Extended NPC dialogue; returns summary to DM |
+| `npc-agent` | 8013 | Extended NPC dialogue; returns summary to DM on close |
 | `memory-agent` | 8014 | Semantic recall + hierarchical memory summarisation |
 
-The `api` service reads campaign phase and active NPC state from the database, then dispatches the incoming player message to the correct agent over A2A. The DM agent can invoke the NPC agent (also over A2A) mid-turn, and the NPC agent's summary is published back to the DM to continue narration.
+The DM agent invokes the memory agent over A2A mid-turn (not via MCP), keeping memory intelligence encapsulated and independently deployable.
 
 ### MCP Tool Servers
 
-Agents interact with shared infrastructure through four [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) HTTP tool servers. Every request carries an `X-Campaign-ID` header extracted by shared middleware, giving each tool call implicit campaign scope without threading IDs through every function signature:
+Agents interact with shared infrastructure through four [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) HTTP tool servers. A `CampaignIDMiddleware` on every MCP server reads the `X-Campaign-ID` request header and makes it available as `request.state.campaign_id` — tool handlers never receive it as a body parameter. This means campaign isolation is enforced at the transport layer, not scattered through business logic.
 
 | MCP Server | Port | Backing Store | Tools |
 | --- | --- | --- | --- |
 | `state-mcp` | 8001 | PostgreSQL | Campaign/character/NPC CRUD, turn log, routing state |
-| `memory-mcp` | 8002 | Qdrant | Semantic store/recall using Gemini embeddings |
+| `memory-mcp` | 8002 | Qdrant | Semantic store/recall using 1536-dim Gemini embeddings |
 | `knowledge-mcp` | 8003 | Neo4j | Entity/relationship extraction, world context retrieval |
-| `media-mcp` | 8004 | Volume + provider services | TTS, STT, image generation, file I/O |
+| `media-mcp` | 8004 | Shared volume + provider services | TTS, STT, image generation, file I/O |
 
 ### Knowledge Graph (Neo4j)
 
-`knowledge-mcp` extracts named entities (NPCs, locations, factions, items) and their relationships from narrative text using a structured LLM call after every DM turn. These are written to Neo4j. Before each DM response the `get_world_context` tool traverses the graph from nodes matching the player's message, returning a compact context string that grounds the LLM in established lore — preventing hallucinated contradictions as campaigns grow.
+`knowledge-mcp` extracts named entities (NPCs, locations, factions, items) and their typed relationships from narrative text via a structured LLM call after every DM turn, then writes them to Neo4j using `MERGE` (idempotent upserts). Before each DM response, `get_world_context` performs a full-text search against node names and descriptions, then returns matching nodes with their 1-hop relationships as a compact context string. This grounds the LLM in established facts without unbounded prompt growth, and prevents the model from contradicting earlier world state as campaigns extend.
+
+Node labels: `NPC`, `Location`, `Faction`, `Item`, `Event`. All carry a `campaign_id` property; every Cypher query filters by it first.
 
 ### Vector Database (Qdrant)
 
-`memory-mcp` stores per-turn narrative events as 1536-dimensional vectors using the `gemini-embedding-2` model. The `memory-agent` performs two operations each turn:
+`memory-mcp` stores narrative events as 1536-dimensional vectors using the `gemini-embedding-2` model (same API key as the LLM, no local model needed). The `memory-agent` runs two operations each turn:
 
-1. **Recall** — semantic nearest-neighbour search over campaign events to surface relevant past context
-2. **Compression** — detects when short-term memory exceeds a threshold, summarises it with an LLM call, and writes the summary back as the new long-term baseline
+1. **Recall** — embeds the current player query, runs a campaign-scoped ANN search, returns the top-8 semantically relevant past events
+2. **Compression** — when the short-term event list reaches a threshold, an LLM call decides whether a narrative break has occurred; if so, short-term memory is summarised into the long-term baseline, keeping only the last three events in the rolling list
 
-This gives the DM agent both recency (short-term list) and depth (long-term summary) without unbounded token growth.
+This gives every DM prompt both semantic depth (Qdrant recall) and temporal recency (short-term list + long-term summary) without unbounded token growth.
 
-### Provider Services (Swappable LLM/Media Backends)
+### Provider Services (Swappable Backends)
 
-Four thin adapter services (`llm-service`, `image-service`, `tts-service`, `stt-service`) wrap external AI APIs behind a uniform FastAPI contract. Each provides:
+Four thin adapter services wrap external AI APIs behind a uniform FastAPI contract. Switching providers requires only changing an env var (`LLM_PROVIDER=anthropic`, `TTS_PROVIDER=gemini`, etc.) — no agent code changes. Each service additionally provides:
 
-- **Redis caching** — repeated requests return cached responses without hitting the API (24 h TTL for audio, 1 h for text)
-- **Usage logging** — token counts written to PostgreSQL `llm_usage` table
-- **Provider switching** — set `LLM_PROVIDER=anthropic`, `TTS_PROVIDER=gemini`, etc. in `.env` without changing agent code
+- **Redis caching** — identical requests return cached responses (24 h TTL for audio, 1 h for text/images)
+- **Usage logging** — token counts written to PostgreSQL `llm_usage` for cost accounting
+- **Langfuse tracing** — per-generation input/output/token tracking (llm-service only, optional)
 
-### Real-time Event Delivery (SSE over Redis pub/sub)
+### Real-Time Event Delivery (SSE over Redis pub/sub)
 
-The `api` dispatches agent tasks as a fire-and-forget background task and immediately returns `200 OK`. Agents publish typed SSE events (`dm_text`, `audio_ready`, `scene_ready`, `npc_introduced`, …) directly to a Redis channel keyed by `campaign_id`. The frontend holds an `EventSource` connection to `/campaigns/{id}/stream` which relays messages from that channel. This decouples agent execution time from HTTP response latency and allows the UI to stream partial results (text first, then audio, then image) as they become available.
+The `api` dispatches agent tasks as a fire-and-forget `asyncio.create_task` and immediately returns `200 OK`. Agents publish typed SSE events (`dm_text`, `audio_ready`, `scene_ready`, `npc_introduced`, …) directly to a Redis channel keyed by `campaign_id`. The browser holds an `EventSource` connection that relays from that channel. This decouples agent execution time from HTTP response latency and lets the UI stream partial results — text first, then audio, then image — as each becomes available.
+
+A per-campaign Redis lock prevents concurrent turns from racing.
 
 ---
 
@@ -107,7 +128,7 @@ The `api` dispatches agent tasks as a fire-and-forget background task and immedi
 | `npc-agent` | FastAPI, httpx | NPC dialogue loop |
 | `character-creator` | FastAPI, httpx | Character creation wizard |
 | `campaign-designer` | FastAPI, httpx | Campaign plan + world seed |
-| `memory-agent` | FastAPI, httpx | Memory recall + summarisation |
+| `memory-agent` | FastAPI, httpx | Semantic recall + memory summarisation |
 | `state-mcp` | FastAPI, SQLAlchemy | PostgreSQL state tool server |
 | `memory-mcp` | FastAPI, Qdrant client | Vector memory tool server |
 | `knowledge-mcp` | FastAPI, Neo4j driver | Knowledge graph tool server |
@@ -120,94 +141,75 @@ The `api` dispatches agent tasks as a fire-and-forget background task and immedi
 | `postgres` | PostgreSQL 16 | Relational state, turn history, usage stats |
 | `qdrant` | Qdrant 1.9 | Semantic memory vectors |
 | `neo4j` | Neo4j 5 Community | World knowledge graph |
-| `redis` | Redis 7 | SSE pub/sub, LLM/TTS response cache |
+| `redis` | Redis 7 | SSE pub/sub + LLM/TTS response cache |
+
+Every service has a Docker Compose health check. Dependent services only start after their dependencies are healthy.
 
 ---
 
 ## Observability
 
-All services run under `opentelemetry-instrument` with OTLP export to Tempo. Prometheus scrapes a metrics port on every service. Logs are forwarded via Promtail to Loki. Everything is visible in a single Grafana instance.
+All services run under `opentelemetry-instrument` with OTLP export to Tempo. Prometheus scrapes a metrics endpoint (port 9464) on every service. Logs are forwarded via Promtail to Loki. All three signals are queryable in a single Grafana instance.
 
-| Tool | Port | What it covers |
+| Tool | Port | Coverage |
 | --- | --- | --- |
-| **Grafana** | 3002 | Unified dashboards: traces (Tempo), metrics (Prometheus), logs (Loki) |
-| **Tempo** | 3200 | Distributed tracing — full request spans across API → agent → MCP → service |
-| **Prometheus** | 9090 | RED metrics (requests, errors, duration) per service |
+| **Grafana** | 3002 | Unified dashboards — traces (Tempo), metrics (Prometheus), logs (Loki) |
+| **Tempo** | 3200 | Distributed traces — full span tree: browser → API → agent → MCP → provider service |
+| **Prometheus** | 9090 | RED metrics per service; Tempo-generated service graph |
 | **Loki + Promtail** | 3100 | Structured log aggregation from all Docker containers |
-| **Langfuse** | 3001 | LLM-specific tracing: input/output, token usage, latency per generation |
-
-Langfuse is optional — the system works without it. Leave `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` blank to disable.
+| **Langfuse** | 3001 | LLM-specific traces — input/output/token counts per generation (optional) |
 
 ---
 
-## Data Flow: A Single Player Turn
+## Data Flow: A Single Turn
 
-```
-1.  Player speaks → frontend uploads audio → api → media-mcp → stt-service
-                                                                (Whisper local)
-2.  api acquires Redis lock (prevents concurrent turns)
-3.  api reads routing state from state-mcp (phase, active_npc_id)
-4.  api dispatches to dm-agent over A2A (fire-and-forget background task)
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant A as API :8000
+    participant D as dm-agent :8012
+    participant Mem as memory-agent :8014
+    participant S as state-mcp :8001
+    participant K as knowledge-mcp :8003
+    participant Med as media-mcp :8004
+    participant R as Redis
 
-5.  dm-agent gathers in parallel:
-      · campaign context + recent turns  (state-mcp → PostgreSQL)
-      · world context                    (knowledge-mcp → Neo4j graph traversal)
-      · semantic memory recall           (memory-agent → Qdrant ANN search)
+    B->>A: POST /audio (voice recording)
+    A->>Med: transcribe (→ stt-service → Whisper)
+    A->>B: { transcript }
+    B->>A: POST /message { content }
+    A->>B: 200 OK  (task runs in background)
+    A->>S: get_routing_state
+    A->>D: A2A tasks/send
 
-6.  dm-agent calls llm-service (structured JSON response):
-      gm_speech, scene_description, memory_note, invoke_npc?
+    par Parallel context gathering
+        D->>S: get_campaign_context + get_turns
+    and
+        D->>K: get_world_context (Neo4j graph traversal)
+    and
+        D->>Mem: A2A recall (Qdrant ANN search)
+    end
 
-7.  dm-agent logs DM turn to state-mcp, publishes dm_text SSE event
-    → frontend renders DM text immediately
+    D->>A: POST llm-service /generate (structured JSON)
+    Note over D: gm_speech · scene_description · memory_note · invoke_npc?
 
-8.  Background (parallel):
-      · TTS: media-mcp → tts-service → audio file → audio_ready SSE
-      · Image: media-mcp → image-service → scene file → scene_ready SSE
-             (image_path logged to state-mcp for reload persistence)
-      · Memory update: memory-agent stores event, compresses if needed
-      · World update: knowledge-mcp extracts entities → Neo4j
+    D->>S: log_turn(role=dm)
+    D->>R: PUBLISH dm_text
+    R-->>B: SSE dm_text  ← frontend renders text immediately
 
-9.  If invoke_npc is set:
-      · dm-agent → save NPC, generate portrait + opening audio (parallel)
-      · dm-agent → set_active_npc in state-mcp
-      · publishes npc_introduced + npc_speech SSE events
-      · api releases lock; next player message routes to npc-agent
-
-10. npc-agent turn (same structure; calls state-mcp, knowledge-mcp, llm-service)
-    On conversation end: publishes summary → dm-agent picks up next turn
-```
-
----
-
-## Repository Structure
-
-```text
-├── api/                     FastAPI backend (auth, campaigns, SSE, dispatcher)
-│   └── alembic/             Database migrations
-├── agents/
-│   ├── shared/              A2A schemas, MCP client helpers, Pydantic response models
-│   ├── dm-agent/
-│   ├── npc-agent/
-│   ├── character-creator/
-│   ├── campaign-designer/
-│   └── memory-agent/
-├── mcp-servers/
-│   ├── shared/              CampaignIDMiddleware, shared schemas
-│   ├── state-mcp/
-│   ├── memory-mcp/
-│   ├── knowledge-mcp/
-│   └── media-mcp/
-├── services/
-│   ├── llm-service/
-│   ├── image-service/
-│   ├── tts-service/
-│   └── stt-service/
-├── frontend/                React 18 SPA (TypeScript, Vite, Zustand)
-├── observability/           Grafana, Prometheus, Tempo, Loki, Promtail config
-├── docker-compose.yml       Full stack orchestration (22 services)
-├── SETUP.md                 Installation and configuration guide
-└── documentation/
-    └── PRODUCT.md           Product overview and how-to-play guide
+    par Background tasks (parallel)
+        D->>Med: speak → tts-service → audio file
+        Med->>R: PUBLISH audio_ready
+        R-->>B: SSE audio_ready
+    and
+        D->>Med: generate_image → image-service → scene file
+        D->>S: log_turn(role=system, image_path=…)
+        Med->>R: PUBLISH scene_ready
+        R-->>B: SSE scene_ready
+    and
+        D->>Mem: A2A store + compress (Qdrant + PostgreSQL)
+        D->>K: update_world (Neo4j entity extraction)
+    end
 ```
 
 ---
@@ -216,40 +218,38 @@ Langfuse is optional — the system works without it. Leave `LANGFUSE_PUBLIC_KEY
 
 | Concern | Technology | Why |
 | --- | --- | --- |
-| Agent communication | Google A2A (JSON-RPC 2.0) | Standard protocol; enforces service boundaries; agent card discovery |
-| Tool calling | MCP over HTTP | Standardised tool interface; campaign-scoped by header middleware |
-| LLM inference | Gemini 2.5 Flash (default) | Structured output, low cost; swappable to Anthropic/OpenAI |
+| Agent communication | Google A2A (JSON-RPC 2.0) | Standard protocol; enforces service boundaries; discovery via agent card |
+| Tool calling | MCP over HTTP | Standardised tool interface; campaign scope injected at transport layer |
+| LLM inference | Gemini 2.5 Flash (default) | Structured output, low cost; swappable to Anthropic/OpenAI via env var |
 | Embeddings | Gemini `gemini-embedding-2` (1536-dim) | Same API key; no local model to maintain |
-| Vector store | Qdrant | Semantic memory recall, ANN search, persistent storage |
-| Knowledge graph | Neo4j 5 + Cypher | Entity/relationship world model; graph traversal for context retrieval |
-| Relational DB | PostgreSQL 16 + Alembic | Campaign state, turn history, usage accounting |
-| Cache / pub-sub | Redis 7 | LLM/TTS response caching; SSE fan-out across API replicas |
-| API framework | FastAPI + Pydantic v2 | Async-native, typed end-to-end, automatic OpenAPI docs |
+| Vector store | Qdrant | Campaign-scoped ANN search; persistent payload storage |
+| Knowledge graph | Neo4j 5 + Cypher | Typed entity/relationship model; full-text + graph traversal for context retrieval |
+| Relational DB | PostgreSQL 16 + Alembic | Campaign state, turn history, usage accounting; versioned schema migrations |
+| Cache / pub-sub | Redis 7 | LLM/TTS response caching; SSE fan-out decoupled from agent execution |
+| API framework | FastAPI + Pydantic v2 | Async-native; typed end-to-end; automatic OpenAPI docs |
 | Frontend | React 18, TypeScript, Vite, Zustand | SSE + Web Audio API; typed API client |
-| Containerisation | Docker Compose | 22-service stack; health checks on every service |
-| Distributed tracing | OpenTelemetry → Grafana Tempo | Full request trace: browser → API → agent → MCP → provider |
-| Metrics | Prometheus + Grafana | RED metrics per service, service graph |
-| Log aggregation | Loki + Promtail | Structured logs from all containers |
+| Containerisation | Docker Compose | 22-service stack; health-checked startup ordering |
+| Distributed tracing | OpenTelemetry → Grafana Tempo | Full request trace across all service boundaries |
+| Metrics | Prometheus + Grafana | RED metrics per service; Tempo service graph |
+| Log aggregation | Loki + Promtail | Structured logs from all containers in one place |
 | LLM observability | Langfuse 3 (optional) | Per-generation input/output/token tracking |
-| Auth | JWT HS256, httpOnly cookie | Stateless; cookie enables SSE and media auth without JS token management |
+| Auth | JWT HS256, httpOnly cookie | Stateless; cookie enables SSE + media auth without JS token management |
 
 ---
 
 ## Setup
 
-See [SETUP.md](SETUP.md) for the full guide. The short version:
+See [documentation/SETUP.md](documentation/SETUP.md) for the full guide. The short version:
 
 ```bash
 cp .env.example .env          # fill in at least one LLM provider key
-docker compose up -d          # builds and starts all 22 services
-# Frontend:  http://localhost:3000
-# API docs:  http://localhost:8000/docs
-# Grafana:   http://localhost:3002
+docker compose up -d          # builds and starts all 22 services (~5 min first run)
 ```
 
-Optional Langfuse LLM tracing:
+| URL | Service |
+| --- | --- |
+| <http://localhost:3000> | Frontend |
+| <http://localhost:8000/docs> | API (OpenAPI) |
+| <http://localhost:3002> | Grafana |
 
-```bash
-docker compose -f observability/docker-compose.yml up -d
-# Then add LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY to .env and restart llm-service
-```
+Optional Langfuse LLM tracing — run the separate stack in [observability/](observability/) and add the resulting API keys to `.env`.
