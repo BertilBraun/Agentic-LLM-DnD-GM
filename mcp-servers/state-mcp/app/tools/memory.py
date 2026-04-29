@@ -5,7 +5,9 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db import get_session
-from ..schemas import GetMemoryOut, UpdateMemoryIn, OkOut
+from shared.schemas import OkOut
+
+from ..schemas import GetMemoryOut, UpdateMemoryIn
 
 router = APIRouter()
 

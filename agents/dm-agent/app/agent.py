@@ -192,6 +192,14 @@ async def run(campaign_id: str, player_message: str) -> str:
                     timeout=120,
                 )
                 if r.file_path:
+                    # Persist so page reloads show the latest scene image
+                    await call_mcp(
+                        STATE_MCP_URL,
+                        'log_turn',
+                        {'role': 'system', 'content': '', 'image_path': r.file_path},
+                        campaign_id,
+                        LogTurnOut,
+                    )
                     await publish_event(campaign_id, {'type': 'scene_ready', 'file_path': r.file_path})
             except Exception:
                 logger.warning('Scene image generation failed (non-critical)', exc_info=True)
@@ -267,6 +275,7 @@ async def _handle_npc(campaign_id: str, invoke_npc: InvokeNpc, visual_style: str
             'content': invoke_npc.opening_line,
             'npc_name': invoke_npc.name,
             'audio_path': opening_audio_path,
+            'image_path': portrait_path,
         },
         campaign_id,
         LogTurnOut,
