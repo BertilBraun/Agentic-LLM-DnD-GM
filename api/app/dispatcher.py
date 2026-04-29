@@ -1,4 +1,5 @@
 """Routes player messages to the correct A2A agent based on campaign phase."""
+
 from __future__ import annotations
 
 import httpx
@@ -12,12 +13,12 @@ OPENING_SCENE_SENTINEL = '__opening_scene__'
 
 
 class RoutingState(BaseModel):
-    phase: str = "character_creation"
+    phase: str = 'character_creation'
     active_npc_id: str | None = None
 
 
 class CharacterContext(BaseModel):
-    name: str = "the adventurer"
+    name: str = 'the adventurer'
 
 
 class CampaignContext(BaseModel):
@@ -47,7 +48,7 @@ async def _get_campaign_context(campaign_id: str) -> CampaignContext:
 
 
 def _opening_prompt(ctx: CampaignContext) -> str:
-    name = ctx.character.name if ctx.character else "the adventurer"
+    name = ctx.character.name if ctx.character else 'the adventurer'
     return (
         f'Describe the opening scene for {name}. Set up the initial situation that draws '
         'them into the adventure, taking into account their background and the campaign synopsis. '

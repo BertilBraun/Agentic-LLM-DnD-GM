@@ -2,7 +2,7 @@ import os
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import VectorParams, Distance, PayloadSchemaType
 
-COLLECTION = "campaign_turns"
+COLLECTION = 'campaign_turns'
 VECTOR_SIZE = 1536
 
 _client: AsyncQdrantClient | None = None
@@ -11,7 +11,7 @@ _client: AsyncQdrantClient | None = None
 def get_qdrant() -> AsyncQdrantClient:
     global _client
     if _client is None:
-        _client = AsyncQdrantClient(url=os.environ.get("QDRANT_URL", "http://qdrant:6333"))
+        _client = AsyncQdrantClient(url=os.environ.get('QDRANT_URL', 'http://qdrant:6333'))
     return _client
 
 
@@ -25,6 +25,6 @@ async def ensure_collection() -> None:
         )
         await client.create_payload_index(
             collection_name=COLLECTION,
-            field_name="campaign_id",
+            field_name='campaign_id',
             field_schema=PayloadSchemaType.KEYWORD,
         )

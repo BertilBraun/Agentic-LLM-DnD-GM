@@ -1,4 +1,5 @@
 """Google A2A protocol — shared schemas for all agent services."""
+
 from __future__ import annotations
 
 from typing import Any, Optional
@@ -8,7 +9,7 @@ from pydantic import BaseModel
 class AgentCard(BaseModel):
     name: str
     description: str
-    version: str = "1.0.0"
+    version: str = '1.0.0'
     skills: list[dict[str, Any]] = []
 
 
@@ -19,8 +20,8 @@ class A2ATaskParams(BaseModel):
 
 
 class A2ARequest(BaseModel):
-    jsonrpc: str = "2.0"
-    method: str = "tasks/send"
+    jsonrpc: str = '2.0'
+    method: str = 'tasks/send'
     params: A2ATaskParams
     id: Optional[Any] = None
 
@@ -31,6 +32,6 @@ class A2AResult(BaseModel):
 
 
 class A2AResponse(BaseModel):
-    jsonrpc: str = "2.0"
+    jsonrpc: str = '2.0'
     result: A2AResult
     id: Optional[Any] = None

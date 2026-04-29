@@ -1,13 +1,12 @@
 from typing import Any, Optional
 from pydantic import BaseModel
 
-from shared.schemas import OkOut
-
 
 # create_campaign
 class CreateCampaignIn(BaseModel):
-    title: Optional[str] = "Untitled Campaign"
-    language: str = "en"
+    title: Optional[str] = 'Untitled Campaign'
+    language: str = 'en'
+
 
 class CreateCampaignOut(BaseModel):
     campaign_id: str
@@ -23,6 +22,7 @@ class SaveCampaignPlanIn(BaseModel):
 class SaveCharacterIn(BaseModel):
     character_json: dict[str, Any]
     portrait_path: Optional[str] = None
+
 
 class SaveCharacterOut(BaseModel):
     character_id: str
@@ -64,6 +64,7 @@ class SaveNPCIn(BaseModel):
     npc_json: dict[str, Any]
     portrait_path: Optional[str] = None
 
+
 class SaveNPCOut(BaseModel):
     npc_id: str
 
@@ -72,6 +73,7 @@ class SaveNPCOut(BaseModel):
 class GetNPCIn(BaseModel):
     npc_id: Optional[str] = None
     name: Optional[str] = None
+
 
 class GetNPCOut(BaseModel):
     npc: Optional[dict[str, Any]]
@@ -91,6 +93,7 @@ class LogTurnIn(BaseModel):
     image_path: Optional[str] = None
     metadata: Optional[dict[str, Any]] = None
 
+
 class LogTurnOut(BaseModel):
     turn_id: str
 
@@ -104,6 +107,7 @@ class GetTurnsIn(BaseModel):
     npc_name: Optional[str] = None
     phase_filter: Optional[str] = None  # e.g. 'active' to exclude setup turns
 
+
 class GetTurnsOut(BaseModel):
     turns: list[dict[str, Any]]
 
@@ -112,6 +116,7 @@ class GetTurnsOut(BaseModel):
 class GetMemoryOut(BaseModel):
     short_term: list[str]
     long_term: str
+
 
 class UpdateMemoryIn(BaseModel):
     short_term: list[str]

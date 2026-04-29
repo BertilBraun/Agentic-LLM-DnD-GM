@@ -1,4 +1,3 @@
-import json
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -11,7 +10,7 @@ from ..schemas import SaveCharacterIn, SaveCharacterOut, CampaignContextOut
 router = APIRouter()
 
 
-@router.post("/tools/save_character", response_model=SaveCharacterOut)
+@router.post('/tools/save_character', response_model=SaveCharacterOut)
 async def save_character(
     body: SaveCharacterIn,
     request: Request,
@@ -40,16 +39,16 @@ async def save_character(
             RETURNING id
         """),
         {
-            "campaign_id": campaign_id,
-            "name": c.get("name", ""),
-            "background": c.get("background", ""),
-            "class_and_level": c.get("class_and_level", ""),
-            "abilities": c.get("abilities", []),
-            "equipment": c.get("equipment", []),
-            "limitations": c.get("limitations", []),
-            "power_level": c.get("power_level", "Novice"),
-            "visual_description": c.get("visual_description", ""),
-            "portrait_path": body.portrait_path,
+            'campaign_id': campaign_id,
+            'name': c.get('name', ''),
+            'background': c.get('background', ''),
+            'class_and_level': c.get('class_and_level', ''),
+            'abilities': c.get('abilities', []),
+            'equipment': c.get('equipment', []),
+            'limitations': c.get('limitations', []),
+            'power_level': c.get('power_level', 'Novice'),
+            'visual_description': c.get('visual_description', ''),
+            'portrait_path': body.portrait_path,
         },
     )
     character_id = str(row.scalar_one())
@@ -57,7 +56,7 @@ async def save_character(
     return SaveCharacterOut(character_id=character_id)
 
 
-@router.post("/tools/get_campaign_context", response_model=CampaignContextOut)
+@router.post('/tools/get_campaign_context', response_model=CampaignContextOut)
 async def get_campaign_context(
     request: Request,
     db: AsyncSession = Depends(get_session),
@@ -73,32 +72,32 @@ async def get_campaign_context(
             LEFT JOIN characters ch ON ch.campaign_id = c.id
             WHERE c.id = :campaign_id
         """),
-        {"campaign_id": campaign_id},
+        {'campaign_id': campaign_id},
     )
     r = row.mappings().first()
     if r is None:
-        raise HTTPException(status_code=404, detail="Campaign not found")
+        raise HTTPException(status_code=404, detail='Campaign not found')
 
     campaign: dict[str, Any] = {
-        "id": str(r["id"]),
-        "title": r["title"],
-        "language": r["language"],
-        "phase": r["phase"],
-        "plan_json": r["plan_json"],
-        "visual_style": r["visual_style"],
+        'id': str(r['id']),
+        'title': r['title'],
+        'language': r['language'],
+        'phase': r['phase'],
+        'plan_json': r['plan_json'],
+        'visual_style': r['visual_style'],
     }
     character: dict[str, Any] | None = None
-    if r["char_id"] is not None:
+    if r['char_id'] is not None:
         character = {
-            "id": str(r["char_id"]),
-            "name": r["name"],
-            "background": r["background"],
-            "class_and_level": r["class_and_level"],
-            "abilities": list(r["abilities"]) if r["abilities"] else [],
-            "equipment": list(r["equipment"]) if r["equipment"] else [],
-            "limitations": list(r["limitations"]) if r["limitations"] else [],
-            "power_level": r["power_level"],
-            "visual_description": r["visual_description"],
-            "portrait_path": r["portrait_path"],
+            'id': str(r['char_id']),
+            'name': r['name'],
+            'background': r['background'],
+            'class_and_level': r['class_and_level'],
+            'abilities': list(r['abilities']) if r['abilities'] else [],
+            'equipment': list(r['equipment']) if r['equipment'] else [],
+            'limitations': list(r['limitations']) if r['limitations'] else [],
+            'power_level': r['power_level'],
+            'visual_description': r['visual_description'],
+            'portrait_path': r['portrait_path'],
         }
     return CampaignContextOut(campaign=campaign, character=character)

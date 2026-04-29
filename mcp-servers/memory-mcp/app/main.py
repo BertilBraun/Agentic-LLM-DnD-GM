@@ -11,11 +11,11 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="memory-mcp", lifespan=lifespan)
+app = FastAPI(title='memory-mcp', lifespan=lifespan)
 app.add_middleware(CampaignIDMiddleware)
 app.include_router(memory.router)
 
 
-@app.get("/health")
+@app.get('/health')
 async def health():
-    return {"ok": True}
+    return {'ok': True}

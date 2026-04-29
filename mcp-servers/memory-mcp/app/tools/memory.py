@@ -26,7 +26,7 @@ class RecallOut(BaseModel):
     context: str
 
 
-@router.post("/tools/store", response_model=OkOut)
+@router.post('/tools/store', response_model=OkOut)
 async def store(body: StoreIn, request: Request) -> OkOut:
     campaign_id: str = request.state.campaign_id
     vector = await embed(body.text)
@@ -38,10 +38,10 @@ async def store(body: StoreIn, request: Request) -> OkOut:
                 id=body.turn_id,
                 vector=vector,
                 payload={
-                    "campaign_id": campaign_id,
-                    "turn_id": body.turn_id,
-                    "role": body.role,
-                    "text_snippet": body.text[:SNIPPET_LEN],
+                    'campaign_id': campaign_id,
+                    'turn_id': body.turn_id,
+                    'role': body.role,
+                    'text_snippet': body.text[:SNIPPET_LEN],
                 },
             )
         ],
@@ -49,7 +49,7 @@ async def store(body: StoreIn, request: Request) -> OkOut:
     return OkOut()
 
 
-@router.post("/tools/recall", response_model=RecallOut)
+@router.post('/tools/recall', response_model=RecallOut)
 async def recall(body: RecallIn, request: Request) -> RecallOut:
     campaign_id: str = request.state.campaign_id
     query_vector = await embed(body.query)
@@ -57,11 +57,9 @@ async def recall(body: RecallIn, request: Request) -> RecallOut:
     results = await client.search(
         collection_name=COLLECTION,
         query_vector=query_vector,
-        query_filter=Filter(
-            must=[FieldCondition(key="campaign_id", match=MatchValue(value=campaign_id))]
-        ),
+        query_filter=Filter(must=[FieldCondition(key='campaign_id', match=MatchValue(value=campaign_id))]),
         limit=body.top_k,
         with_payload=True,
     )
-    lines = [f"[{r.payload['role']}] {r.payload['text_snippet']}" for r in results]
-    return RecallOut(context="\n".join(lines))
+    lines = [f'[{r.payload["role"]}] {r.payload["text_snippet"]}' for r in results]
+    return RecallOut(context='\n'.join(lines))

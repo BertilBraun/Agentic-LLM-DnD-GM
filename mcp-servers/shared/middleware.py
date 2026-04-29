@@ -9,5 +9,5 @@ class CampaignIDMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
-        request.state.campaign_id = request.headers.get("X-Campaign-ID")
+        request.state.campaign_id = request.headers.get('X-Campaign-ID')
         return await call_next(request)

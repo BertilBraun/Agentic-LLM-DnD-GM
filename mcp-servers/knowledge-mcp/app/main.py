@@ -12,12 +12,12 @@ async def lifespan(app: FastAPI):
     await close_driver()
 
 
-app = FastAPI(title="knowledge-mcp", lifespan=lifespan)
+app = FastAPI(title='knowledge-mcp', lifespan=lifespan)
 app.add_middleware(CampaignIDMiddleware)
 
 app.include_router(knowledge.router)
 
 
-@app.get("/health")
+@app.get('/health')
 async def health():
-    return {"ok": True}
+    return {'ok': True}

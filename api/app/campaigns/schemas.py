@@ -3,8 +3,8 @@ from pydantic import BaseModel
 
 
 class CreateCampaignRequest(BaseModel):
-    title: Optional[str] = "Untitled Campaign"
-    language: str = "en"
+    title: Optional[str] = 'Untitled Campaign'
+    language: str = 'en'
 
 
 class CampaignOut(BaseModel):

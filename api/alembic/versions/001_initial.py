@@ -4,11 +4,12 @@ Revision ID: 001
 Revises:
 Create Date: 2026-04-28
 """
+
 from typing import Sequence, Union
 
 from alembic import op
 
-revision: str = "001"
+revision: str = '001'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -26,7 +27,7 @@ def upgrade() -> None:
         )
     """)
 
-    op.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users (email)")
+    op.execute('CREATE INDEX IF NOT EXISTS idx_users_email ON users (email)')
 
     op.execute("""
         CREATE TABLE IF NOT EXISTS llm_usage (
@@ -41,7 +42,7 @@ def upgrade() -> None:
         )
     """)
 
-    op.execute("CREATE INDEX IF NOT EXISTS idx_llm_usage_user ON llm_usage (user_id, created_at DESC)")
+    op.execute('CREATE INDEX IF NOT EXISTS idx_llm_usage_user ON llm_usage (user_id, created_at DESC)')
 
     op.execute("""
         DO $$ BEGIN
@@ -74,8 +75,8 @@ def upgrade() -> None:
         )
     """)
 
-    op.execute("CREATE INDEX IF NOT EXISTS idx_campaigns_user  ON campaigns (user_id)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_campaigns_phase ON campaigns (phase)")
+    op.execute('CREATE INDEX IF NOT EXISTS idx_campaigns_user  ON campaigns (user_id)')
+    op.execute('CREATE INDEX IF NOT EXISTS idx_campaigns_phase ON campaigns (phase)')
 
     op.execute("""
         CREATE TABLE IF NOT EXISTS characters (
@@ -116,8 +117,8 @@ def upgrade() -> None:
         )
     """)
 
-    op.execute("CREATE INDEX IF NOT EXISTS idx_npcs_campaign ON npcs (campaign_id)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_npcs_name     ON npcs (campaign_id, name)")
+    op.execute('CREATE INDEX IF NOT EXISTS idx_npcs_campaign ON npcs (campaign_id)')
+    op.execute('CREATE INDEX IF NOT EXISTS idx_npcs_name     ON npcs (campaign_id, name)')
 
     op.execute("""
         DO $$ BEGIN
@@ -143,8 +144,8 @@ def upgrade() -> None:
         )
     """)
 
-    op.execute("CREATE INDEX IF NOT EXISTS idx_turns_campaign_created ON turns (campaign_id, created_at DESC)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_turns_campaign_role    ON turns (campaign_id, role)")
+    op.execute('CREATE INDEX IF NOT EXISTS idx_turns_campaign_created ON turns (campaign_id, created_at DESC)')
+    op.execute('CREATE INDEX IF NOT EXISTS idx_turns_campaign_role    ON turns (campaign_id, role)')
     op.execute("""
         CREATE INDEX IF NOT EXISTS idx_turns_campaign_npc ON turns (campaign_id, npc_name)
         WHERE npc_name IS NOT NULL
@@ -152,12 +153,12 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute("DROP TABLE IF EXISTS turns")
-    op.execute("ALTER TABLE campaigns DROP CONSTRAINT IF EXISTS fk_campaigns_active_npc")
-    op.execute("DROP TABLE IF EXISTS npcs")
-    op.execute("DROP TABLE IF EXISTS characters")
-    op.execute("DROP TABLE IF EXISTS campaigns")
-    op.execute("DROP TABLE IF EXISTS llm_usage")
-    op.execute("DROP TABLE IF EXISTS users")
-    op.execute("DROP TYPE IF EXISTS turn_role")
-    op.execute("DROP TYPE IF EXISTS campaign_phase")
+    op.execute('DROP TABLE IF EXISTS turns')
+    op.execute('ALTER TABLE campaigns DROP CONSTRAINT IF EXISTS fk_campaigns_active_npc')
+    op.execute('DROP TABLE IF EXISTS npcs')
+    op.execute('DROP TABLE IF EXISTS characters')
+    op.execute('DROP TABLE IF EXISTS campaigns')
+    op.execute('DROP TABLE IF EXISTS llm_usage')
+    op.execute('DROP TABLE IF EXISTS users')
+    op.execute('DROP TYPE IF EXISTS turn_role')
+    op.execute('DROP TYPE IF EXISTS campaign_phase')

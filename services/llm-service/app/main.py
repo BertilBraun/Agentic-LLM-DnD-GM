@@ -131,7 +131,7 @@ async def _log_usage(user_id: Optional[str], tokens_in: int, tokens_out: int, ca
             )
             await session.commit()
     except Exception:
-        logger.warning("Usage logging failed (non-critical)", exc_info=True)
+        logger.warning('Usage logging failed (non-critical)', exc_info=True)
 
 
 @app.get('/health')

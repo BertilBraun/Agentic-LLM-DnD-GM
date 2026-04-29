@@ -1,4 +1,5 @@
 """Pydantic response models for all MCP tool calls used by agents."""
+
 from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -6,20 +7,21 @@ from pydantic import BaseModel, ConfigDict, Field
 
 # ─── State MCP ────────────────────────────────────────────────────
 
+
 class Turn(BaseModel):
-    id: str = ""
-    campaign_id: str = ""
-    role: str = ""
-    content: str = ""
+    id: str = ''
+    campaign_id: str = ''
+    role: str = ''
+    content: str = ''
     npc_name: str | None = None
     audio_path: str | None = None
     image_path: str | None = None
     metadata: dict = Field(default_factory=dict)
-    created_at: str = ""
+    created_at: str = ''
 
 
 class LogTurnOut(BaseModel):
-    turn_id: str = ""
+    turn_id: str = ''
 
 
 class GetTurnsOut(BaseModel):
@@ -27,12 +29,12 @@ class GetTurnsOut(BaseModel):
 
 
 class CampaignData(BaseModel):
-    model_config = ConfigDict(extra="allow")
-    visual_style: str = ""
+    model_config = ConfigDict(extra='allow')
+    visual_style: str = ''
 
 
 class CharacterData(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra='allow')
 
 
 class CampaignContextOut(BaseModel):
@@ -41,25 +43,25 @@ class CampaignContextOut(BaseModel):
 
 
 class NpcBriefing(BaseModel):
-    goals: str = ""
-    knows: str = ""
-    mood: str = ""
-    reveal_if: str = ""
+    goals: str = ''
+    knows: str = ''
+    mood: str = ''
+    reveal_if: str = ''
 
 
 class NpcData(BaseModel):
-    model_config = ConfigDict(extra="allow")
-    name: str = ""
-    role: str = ""
-    voice_id: str = "ash"
-    voice_instructions: str = ""
-    visual_description: str = ""
-    opening_line: str = ""
+    model_config = ConfigDict(extra='allow')
+    name: str = ''
+    role: str = ''
+    voice_id: str = 'ash'
+    voice_instructions: str = ''
+    visual_description: str = ''
+    opening_line: str = ''
     portrait_path: str | None = None
 
 
 class SaveNpcOut(BaseModel):
-    npc_id: str = ""
+    npc_id: str = ''
 
 
 class GetNpcOut(BaseModel):
@@ -74,19 +76,21 @@ class ActiveNpcStateOut(BaseModel):
 
 class GetMemoryOut(BaseModel):
     short_term: list[str] = Field(default_factory=list)
-    long_term: str = ""
+    long_term: str = ''
 
 
 # ─── Memory MCP ───────────────────────────────────────────────────
 
+
 class RecallOut(BaseModel):
-    context: str = ""
+    context: str = ''
 
 
 # ─── Knowledge MCP ────────────────────────────────────────────────
 
+
 class WorldContextOut(BaseModel):
-    context: str = ""
+    context: str = ''
 
 
 class UpdateWorldOut(BaseModel):
@@ -96,15 +100,17 @@ class UpdateWorldOut(BaseModel):
 
 # ─── Media MCP ────────────────────────────────────────────────────
 
+
 class SpeakOut(BaseModel):
-    file_path: str = ""
+    file_path: str = ''
 
 
 class ImageOut(BaseModel):
-    file_path: str = ""
+    file_path: str = ''
 
 
 # ─── Generic ──────────────────────────────────────────────────────
+
 
 class OkOut(BaseModel):
     ok: bool = True

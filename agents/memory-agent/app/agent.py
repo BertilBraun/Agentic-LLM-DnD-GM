@@ -1,4 +1,5 @@
 """Memory agent — mirrors SimpleMemorySystem from src/memory.py (Section 5.6)."""
+
 from __future__ import annotations
 
 import logging
@@ -46,59 +47,72 @@ Respond with JSON: {"compressed_long_term": "...", "session_summary": "..."}"""
 
 
 class MemoryCutoffDecision(BaseModel):
-    reason: str = ""
+    reason: str = ''
     should_compress: bool = False
 
 
 class MemoryCompression(BaseModel):
-    compressed_long_term: str = ""
-    session_summary: str = ""
+    compressed_long_term: str = ''
+    session_summary: str = ''
 
 
 async def run(campaign_id: str, query: str, new_event: str) -> dict:
     """Returns {recalled_context, long_term_summary, recent_events}."""
 
     # 1. Load current memory state
-    mem = await call_mcp(STATE_MCP_URL, "get_memory", {}, campaign_id, GetMemoryOut)
+    mem = await call_mcp(STATE_MCP_URL, 'get_memory', {}, campaign_id, GetMemoryOut)
     short_term: list[str] = list(mem.short_term)
     long_term: str = mem.long_term
 
     # 2. Store new event if provided
     if new_event:
         turn_id = str(uuid.uuid4())
-        await call_mcp(MEMORY_MCP_URL, "store", {"turn_id": turn_id, "text": new_event, "role": "dm"}, campaign_id, OkOut)
+        await call_mcp(
+            MEMORY_MCP_URL, 'store', {'turn_id': turn_id, 'text': new_event, 'role': 'dm'}, campaign_id, OkOut
+        )
         short_term.append(new_event)
 
     # 3. Semantic recall
-    recall_result = await call_mcp(MEMORY_MCP_URL, "recall", {"query": query, "top_k": 8}, campaign_id, RecallOut)
+    recall_result = await call_mcp(MEMORY_MCP_URL, 'recall', {'query': query, 'top_k': 8}, campaign_id, RecallOut)
     recalled_context: str = recall_result.context
 
     # 4. Check if we should compress
     if len(short_term) >= STM_THRESHOLD:
-        recent_events_text = "\n".join(short_term)
+        recent_events_text = '\n'.join(short_term)
         try:
-            decision = await call_llm_structured([
-                {"role": "system", "content": CUTOFF_SYSTEM},
-                {"role": "user", "content": f"RECENT EVENTS:\n{recent_events_text}"},
-            ], MemoryCutoffDecision)
+            decision = await call_llm_structured(
+                [
+                    {'role': 'system', 'content': CUTOFF_SYSTEM},
+                    {'role': 'user', 'content': f'RECENT EVENTS:\n{recent_events_text}'},
+                ],
+                MemoryCutoffDecision,
+            )
             if decision.should_compress:
-                compression = await call_llm_structured([
-                    {"role": "system", "content": COMPRESSION_SYSTEM},
-                    {"role": "user", "content": (
-                        f"CURRENT LONG-TERM MEMORY:\n{long_term}\n\n"
-                        f"SHORT-TERM MEMORY TO COMPRESS:\n{recent_events_text}"
-                    )},
-                ], MemoryCompression)
+                compression = await call_llm_structured(
+                    [
+                        {'role': 'system', 'content': COMPRESSION_SYSTEM},
+                        {
+                            'role': 'user',
+                            'content': (
+                                f'CURRENT LONG-TERM MEMORY:\n{long_term}\n\n'
+                                f'SHORT-TERM MEMORY TO COMPRESS:\n{recent_events_text}'
+                            ),
+                        },
+                    ],
+                    MemoryCompression,
+                )
                 long_term = compression.compressed_long_term or long_term
                 short_term = short_term[-3:]  # keep last 3 events
         except Exception:
-            logger.warning("Memory compression failed (non-critical)", exc_info=True)
+            logger.warning('Memory compression failed (non-critical)', exc_info=True)
 
     # 5. Persist updated memory
-    await call_mcp(STATE_MCP_URL, "update_memory", {"short_term": short_term, "long_term": long_term}, campaign_id, OkOut)
+    await call_mcp(
+        STATE_MCP_URL, 'update_memory', {'short_term': short_term, 'long_term': long_term}, campaign_id, OkOut
+    )
 
     return {
-        "recalled_context": recalled_context,
-        "long_term_summary": long_term,
-        "recent_events": short_term,
+        'recalled_context': recalled_context,
+        'long_term_summary': long_term,
+        'recent_events': short_term,
     }
