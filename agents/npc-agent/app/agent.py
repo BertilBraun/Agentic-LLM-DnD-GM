@@ -179,16 +179,9 @@ async def run(campaign_id: str, player_message: str) -> str:
 
     # 9. If done, summarise and clear
     if npc_turn.done:
-        all_conv_turns = conv_turns + [
-            {'role': 'player', 'content': player_message},
-            {'role': 'npc', 'content': npc_turn.npc_speech},
-        ]
-        conv_transcript = '\n'.join(
-            _format_turn(
-                t['role'] if isinstance(t, dict) else t.role, t['content'] if isinstance(t, dict) else t.content
-            )
-            for t in all_conv_turns
-        )
+        conv_transcript = '\n'.join(_format_turn(t.role, t.content) for t in conv_turns)
+        conv_transcript += f'\n{_format_turn("player", player_message)}'
+        conv_transcript += f'\n{_format_turn("npc", npc_turn.npc_speech)}'
         summary_text: str
         try:
             summary = await call_llm_structured(

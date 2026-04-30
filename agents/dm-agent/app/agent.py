@@ -115,21 +115,47 @@ async def _call_memory_agent(campaign_id: str, query: str, new_event: str) -> Me
         return MemoryAgentResult()
 
 
+async def _get_campaign_context(campaign_id: str) -> CampaignContextOut:
+    try:
+        return await call_mcp(STATE_MCP_URL, 'get_campaign_context', {}, campaign_id, CampaignContextOut)
+    except Exception:
+        logger.warning('Failed to get campaign context', exc_info=True)
+        return CampaignContextOut()
+
+
+async def _get_turns(campaign_id: str) -> GetTurnsOut:
+    try:
+        return await call_mcp(
+            STATE_MCP_URL, 'get_turns', {'limit': 10, 'exclude_roles': ['npc']}, campaign_id, GetTurnsOut
+        )
+    except Exception:
+        logger.warning('Failed to get turns', exc_info=True)
+        return GetTurnsOut()
+
+
+async def _get_world_context(campaign_id: str, focus_text: str) -> WorldContextOut:
+    try:
+        return await call_mcp(
+            KNOWLEDGE_MCP_URL, 'get_world_context', {'focus_text': focus_text}, campaign_id, WorldContextOut
+        )
+    except Exception:
+        logger.warning('Failed to get world context', exc_info=True)
+        return WorldContextOut()
+
+
 async def run(campaign_id: str, player_message: str) -> str:
     # 1. Gather all context in parallel
-    ctx, turns_resp, world_resp, mem_resp = await asyncio.gather(
-        call_mcp(STATE_MCP_URL, 'get_campaign_context', {}, campaign_id, CampaignContextOut),
-        call_mcp(STATE_MCP_URL, 'get_turns', {'limit': 10, 'exclude_roles': ['npc']}, campaign_id, GetTurnsOut),
-        call_mcp(KNOWLEDGE_MCP_URL, 'get_world_context', {'focus_text': player_message}, campaign_id, WorldContextOut),
+    ctx, turns_resp, world_resp, mem = await asyncio.gather(
+        _get_campaign_context(campaign_id),
+        _get_turns(campaign_id),
+        _get_world_context(campaign_id, player_message),
         _call_memory_agent(campaign_id, player_message, ''),
-        return_exceptions=True,
     )
 
-    campaign = ctx.campaign if isinstance(ctx, CampaignContextOut) else CampaignContextOut().campaign
-    character = ctx.character if isinstance(ctx, CampaignContextOut) else None
-    turns = turns_resp.turns if isinstance(turns_resp, GetTurnsOut) else []
-    world_context = world_resp.context if isinstance(world_resp, WorldContextOut) else ''
-    mem = mem_resp if isinstance(mem_resp, MemoryAgentResult) else MemoryAgentResult()
+    campaign = ctx.campaign
+    character = ctx.character
+    turns = turns_resp.turns
+    world_context = world_resp.context
     long_term_summary = mem.long_term_summary
     recalled_context = mem.recalled_context
     recent_events = mem.recent_events
@@ -237,31 +263,41 @@ async def _handle_npc(campaign_id: str, invoke_npc: InvokeNpc, visual_style: str
     )
     npc_id: str = save_resp.npc_id
 
-    portrait_resp, npc_audio_resp = await asyncio.gather(
-        call_mcp(
-            MEDIA_MCP_URL,
-            'generate_image',
-            {'prompt': invoke_npc.visual_description, 'style': visual_style, 'type': 'portrait'},
-            campaign_id,
-            ImageOut,
-            timeout=120,
-        ),
-        call_mcp(
-            MEDIA_MCP_URL,
-            'speak',
-            {
-                'text': invoke_npc.opening_line,
-                'voice_id': invoke_npc.voice_id,
-                'voice_instructions': invoke_npc.voice_instructions,
-            },
-            campaign_id,
-            SpeakOut,
-            timeout=90,
-        ),
-        return_exceptions=True,
-    )
-    portrait_path: str | None = portrait_resp.file_path if isinstance(portrait_resp, ImageOut) else None
-    opening_audio_path: str | None = npc_audio_resp.stream_path if isinstance(npc_audio_resp, SpeakOut) else None
+    async def _npc_portrait() -> ImageOut:
+        try:
+            return await call_mcp(
+                MEDIA_MCP_URL,
+                'generate_image',
+                {'prompt': invoke_npc.visual_description, 'style': visual_style, 'type': 'portrait'},
+                campaign_id,
+                ImageOut,
+                timeout=120,
+            )
+        except Exception:
+            logger.warning('NPC portrait generation failed (non-critical)', exc_info=True)
+            return ImageOut()
+
+    async def _npc_opening_audio() -> SpeakOut:
+        try:
+            return await call_mcp(
+                MEDIA_MCP_URL,
+                'speak',
+                {
+                    'text': invoke_npc.opening_line,
+                    'voice_id': invoke_npc.voice_id,
+                    'voice_instructions': invoke_npc.voice_instructions,
+                },
+                campaign_id,
+                SpeakOut,
+                timeout=90,
+            )
+        except Exception:
+            logger.warning('NPC opening audio failed (non-critical)', exc_info=True)
+            return SpeakOut()
+
+    portrait_resp, npc_audio_resp = await asyncio.gather(_npc_portrait(), _npc_opening_audio())
+    portrait_path: str | None = portrait_resp.file_path
+    opening_audio_path: str | None = npc_audio_resp.stream_path
 
     if portrait_path:
         await call_mcp(

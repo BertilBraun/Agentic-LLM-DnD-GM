@@ -26,8 +26,6 @@ async def get_memory(
     if r is None:
         raise HTTPException(status_code=404, detail='Campaign not found')
     stm = r['short_term_memory']
-    if isinstance(stm, str):
-        stm = json.loads(stm)
     return GetMemoryOut(short_term=stm or [], long_term=r['long_term_memory'] or '')
 
 
